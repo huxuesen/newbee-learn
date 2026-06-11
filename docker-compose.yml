@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  web:
+    build: .
+    container_name: baomiguan-web
+    ports:
+      - "8000:8000"
+    environment:
+      - AUTH_PASSWORD=newbee
+      - JWT_SECRET=auto-baomiguan-secret-key-2026
+      - PORT=8000
+    restart: unless-stopped

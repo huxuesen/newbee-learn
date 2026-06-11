@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>小蜜蜂学习系统</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
+<style>
+  :root {
+    --primary: #f59e0b;
+    --primary-light: #fbbf24;
+    --primary-dark: #d97706;
+    --bg: #fefce8;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --text: #1f2937;
+    --text-dim: #6b7280;
+    --success: #10b981;
+    --danger: #ef4444;
+    --info: #3b82f6;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.04);
+    --shadow-lg: 0 4px 20px rgba(0,0,0,.1);
+    --radius: 14px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", "Noto Sans SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── 登录页 ─────────────────────────── */
+  .login-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px 16px;
+    background: linear-gradient(135deg, #fef9c3 0%, #fef3c7 50%, #fde68a 100%);
+  }
+  .login-card {
+    background: var(--card);
+    border-radius: 20px;
+    padding: 40px 28px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: var(--shadow-lg);
+  }
+  .login-logo {
+    text-align: center;
+    font-size: 3.2em;
+    margin-bottom: 4px;
+  }
+  .login-card h1 {
+    text-align: center;
+    font-size: 1.5em;
+    margin-bottom: 6px;
+    color: var(--primary-dark);
+  }
+  .login-card .subtitle {
+    text-align: center;
+    color: var(--text-dim);
+    margin-bottom: 28px;
+    font-size: .85em;
+  }
+  .form-group {
+    margin-bottom: 16px;
+  }
+  .form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: .82em;
+    font-weight: 500;
+    color: var(--text-dim);
+  }
+  .form-group input {
+    width: 100%;
+    padding: 13px 16px;
+    border-radius: 12px;
+    border: 1.5px solid var(--border);
+    background: #f9fafb;
+    color: var(--text);
+    font-size: 16px; /* prevent iOS zoom */
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .form-group input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(245,158,11,.15);
+    background: #fff;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 24px;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .2s;
+    color: #fff;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-light)); width:100%; box-shadow: 0 4px 12px rgba(245,158,11,.3); }
+  .btn-primary:hover { box-shadow: 0 4px 16px rgba(245,158,11,.4); }
+  .btn-primary:disabled { opacity:.5; cursor:not-allowed; box-shadow:none; }
+  .btn-success { background: linear-gradient(135deg, var(--success), #34d399); }
+  .btn-danger { background: linear-gradient(135deg, var(--danger), #f87171); }
+  .btn-outline {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    color: var(--text);
+  }
+  .btn-outline:hover { background: #f9fafb; }
+
+  .error-msg {
+    color: var(--danger);
+    font-size: .82em;
+    margin-top: 10px;
+    text-align: center;
+    min-height: 20px;
+  }
+
+  /* ── 主面板 ─────────────────────────── */
+  .dashboard { display:none; min-height:100vh; background:var(--bg); }
+  .dash-header {
+    position: sticky; top:0; z-index:10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: rgba(255,255,255,.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .dash-header .logo { font-weight:700; font-size:1.05em; display:flex; align-items:center; gap:6px; }
+  .dash-header .user-info { display:flex; align-items:center; gap:10px; font-size:.85em; }
+  .dash-header .user-info .dot {
+    width:8px; height:8px; border-radius:50%; background:var(--success); display:inline-block;
+    box-shadow: 0 0 6px rgba(16,185,129,.4);
+  }
+  .dash-body { padding:16px; max-width:640px; margin:0 auto; padding-bottom:40px; }
+
+  /* 保密观登录卡片 */
+  .baomi-login-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 22px 20px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+  .baomi-login-card h3 {
+    margin-bottom: 16px;
+    font-size: 1em;
+    color: var(--primary-dark);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .baomi-login-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .baomi-login-row .form-group { flex:1; min-width:0; margin-bottom:0; }
+  .baomi-login-row .btn { height:46px; white-space:nowrap; padding:0 20px; flex-shrink:0; }
+
+  /* 信息卡 */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .info-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+    box-shadow: var(--shadow);
+    transition: transform .15s;
+  }
+  .info-card:active { transform:scale(.98); }
+  .info-card .label { font-size:.75em; color:var(--text-dim); margin-bottom:4px; font-weight:500; }
+  .info-card .value { font-size:1.5em; font-weight:700; }
+  .info-card .value.green { color:var(--success); }
+  .info-card .value.blue  { color:var(--info); }
+  .info-card .value.yellow { color:var(--primary-dark); }
+  .info-card.full { grid-column: 1 / -1; }
+
+  /* 进度条 */
+  .progress-bar-wrap {
+    width:100%;
+    height:8px;
+    background:#e5e7eb;
+    border-radius:4px;
+    overflow:hidden;
+    margin-top:8px;
+  }
+  .progress-bar-fill {
+    height:100%;
+    background: linear-gradient(90deg, var(--primary), var(--primary-light));
+    border-radius:4px;
+    transition: width .5s ease;
+  }
+
+  /* 操作按钮组 */
+  .action-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .action-bar .btn { flex:1; font-size:15px; padding:14px 12px; }
+
+  /* 日志区 */
+  .log-section {
+    background: var(--card);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .log-header {
+    padding: 14px 18px;
+    font-weight: 600;
+    font-size: .9em;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .log-header .status-badge {
+    font-size: .72em;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+  .badge-idle     { background:#f3f4f6; color:#6b7280; }
+  .badge-learning { background:#dbeafe; color:#2563eb; }
+  .badge-exam     { background:#fef3c7; color:#d97706; }
+  .badge-completed{ background:#d1fae5; color:#059669; }
+  .badge-error    { background:#fee2e2; color:#dc2626; }
+
+  .log-body {
+    height: 280px;
+    overflow-y: auto;
+    padding: 14px 16px;
+    background: #fafafa;
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: .78em;
+    line-height: 1.8;
+    -webkit-overflow-scrolling: touch;
+  }
+  .log-entry { white-space:pre-wrap; word-break:break-all; color:#374151; }
+  .log-entry.error { color: #dc2626; }
+  .log-entry .time { color: #9ca3af; margin-right:6px; }
+
+  /* 隐藏 */
+  .hidden { display:none !important; }
+
+  /* 响应式 */
+  @media(max-width:400px) {
+    .login-card { padding:32px 20px; }
+    .info-grid { gap:8px; }
+    .info-card { padding:14px 12px; }
+    .info-card .value { font-size:1.3em; }
+    .action-bar { gap:8px; }
+    .action-bar .btn { font-size:14px; padding:12px 8px; }
+    .baomi-login-row { flex-direction:column; }
+    .baomi-login-row .btn { width:100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ 登录页 ═══════════ -->
+<div id="loginPage" class="login-wrapper">
+  <div class="login-card">
+    <div class="login-logo">🐝</div>
+    <h1>小蜜蜂学习系统</h1>
+
+    <form id="loginForm" onsubmit="handleAccess(event)">
+      <div class="form-group">
+        <label>访问密码</label>
+        <input type="password" id="accessPassword" placeholder="请输入访问密码" required>
+      </div>
+      <button type="submit" class="btn btn-primary" id="loginBtn">进 入</button>
+      <div class="error-msg" id="loginError"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════ 主面板 ═══════════ -->
+<div id="dashboardPage" class="dashboard">
+  <div class="dash-header">
+    <div class="logo">🐝 小蜜蜂学习系统</div>
+    <div class="user-info">
+      <span id="userLabel" class="hidden"><span class="dot"></span> <span id="nickname">-</span></span>
+      <button class="btn btn-outline" onclick="logout()" style="padding:6px 14px; font-size:.78em;">退出</button>
+    </div>
+  </div>
+  <div class="dash-body">
+    <!-- 保密观登录卡片（未登录时显示） -->
+    <div id="baomiLoginCard" class="baomi-login-card">
+      <h3>📱 登录学习账号</h3>
+      <div class="baomi-login-row">
+        <div class="form-group">
+          <label>手机号</label>
+          <input type="text" id="phone" placeholder="请输入手机号">
+        </div>
+        <div class="form-group">
+          <label>密码</label>
+          <input type="password" id="baomiPassword" placeholder="请输入密码">
+        </div>
+        <button class="btn btn-success" id="baomiLoginBtn" onclick="handleBaomiLogin()">登 录</button>
+      </div>
+      <div class="error-msg" id="baomiError"></div>
+    </div>
+
+    <!-- 功能区（登录后显示） -->
+    <div id="funcArea" class="hidden">
+      <!-- 信息卡 -->
+      <div class="info-grid">
+        <div class="info-card full">
+          <div class="label">学习进度</div>
+          <div class="value blue" id="progressPercent">--</div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="progressBar" style="width:0%"></div>
+          </div>
+          <div style="margin-top:6px; font-size:.78em; color:var(--text-dim)" id="progressDetail">-</div>
+        </div>
+        <div class="info-card">
+          <div class="label">已学 / 总计</div>
+          <div class="value green" id="resourceCount">--</div>
+        </div>
+        <div class="info-card">
+          <div class="label">任务状态</div>
+          <div class="value yellow" id="taskStatus">空闲</div>
+        </div>
+        <div class="info-card full">
+          <div class="label">课程名称</div>
+          <div class="value" id="courseName" style="font-size:.95em; font-weight:600; line-height:1.4;">-</div>
+        </div>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="action-bar">
+        <button class="btn btn-success" id="btnLearning" onclick="startTask('learning')">▶ 开始刷课</button>
+        <button class="btn btn-danger" id="btnExam" onclick="startTask('exam')">📝 开始考试</button>
+      </div>
+      <div style="margin-bottom:16px;">
+        <button class="btn btn-outline" onclick="refreshProgress()" style="width:100%;">🔄 刷新进度</button>
+      </div>
+
+      <!-- 日志 -->
+      <div class="log-section">
+        <div class="log-header">
+          <span>📋 实时日志</span>
+          <span class="status-badge badge-idle" id="logBadge">空闲</span>
+        </div>
+        <div class="log-body" id="logBody">
+          <div class="log-entry" style="color:#9ca3af;">等待操作...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 全局状态 ─────────────────────────────
+let JWT = localStorage.getItem('jwt_token') || '';
+let PHONE = '';
+let NICKNAME = '';
+let LOGGED_IN = false;
+let evtSource = null;
+let progressTimer = null;
+
+// ── 初始化 ──────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  if (JWT) {
+    try {
+      const resp = await fetch('/api/auth/check', { headers: authHeaders() });
+      if (resp.ok) {
+        const data = await resp.json();
+        PHONE = data.phone;
+        NICKNAME = data.nickname;
+        LOGGED_IN = data.logged_in;
+        showDashboard();
+        if (LOGGED_IN) refreshProgress();
+        return;
+      }
+    } catch {}
+    JWT = '';
+    localStorage.removeItem('jwt_token');
+  }
+  showLogin();
+});
+
+// ── 第一步：访问密码 ────────────────────
+async function handleAccess(e) {
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  const err = document.getElementById('loginError');
+  btn.disabled = true;
+  btn.textContent = '验证中...';
+  err.textContent = '';
+  try {
+    const resp = await fetch('/api/auth/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access_password: document.getElementById('accessPassword').value }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { err.textContent = data.detail || '验证失败'; return; }
+    JWT = data.token;
+    localStorage.setItem('jwt_token', JWT);
+    showDashboard();
+  } catch (e) {
+    err.textContent = '网络错误: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '进 入';
+  }
+}
+
+// ── 第二步：学习账号登录 ────────────────
+async function handleBaomiLogin() {
+  const btn = document.getElementById('baomiLoginBtn');
+  const err = document.getElementById('baomiError');
+  const phone = document.getElementById('phone').value.trim();
+  const pwd = document.getElementById('baomiPassword').value;
+  if (!phone || !pwd) { err.textContent = '请填写手机号和密码'; return; }
+  btn.disabled = true;
+  btn.textContent = '登录中...';
+  err.textContent = '';
+  try {
+    const resp = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, password: pwd }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { err.textContent = data.detail || '登录失败'; return; }
+    NICKNAME = data.nickname;
+    PHONE = data.phone;
+    LOGGED_IN = true;
+    document.getElementById('nickname').textContent = NICKNAME || PHONE;
+    document.getElementById('userLabel').classList.remove('hidden');
+    document.getElementById('baomiLoginCard').classList.add('hidden');
+    document.getElementById('funcArea').classList.remove('hidden');
+    refreshProgress();
+  } catch (e) {
+    err.textContent = '网络错误: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '登 录';
+  }
+}
+
+function logout() {
+  JWT = '';
+  LOGGED_IN = false;
+  localStorage.removeItem('jwt_token');
+  if (evtSource) { evtSource.close(); evtSource = null; }
+  if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+  showLogin();
+}
+
+// ── 页面切换 ────────────────────────────
+function showLogin() {
+  document.getElementById('loginPage').style.display = 'flex';
+  document.getElementById('dashboardPage').style.display = 'none';
+}
+function showDashboard() {
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('dashboardPage').style.display = 'block';
+  if (LOGGED_IN) {
+    document.getElementById('nickname').textContent = NICKNAME || PHONE;
+    document.getElementById('userLabel').classList.remove('hidden');
+    document.getElementById('baomiLoginCard').classList.add('hidden');
+    document.getElementById('funcArea').classList.remove('hidden');
+  } else {
+    document.getElementById('userLabel').classList.add('hidden');
+    document.getElementById('baomiLoginCard').classList.remove('hidden');
+    document.getElementById('funcArea').classList.add('hidden');
+  }
+}
+
+function authHeaders() {
+  return { 'Authorization': 'Bearer ' + JWT };
+}
+
+// ── 刷新进度 ────────────────────────────
+async function refreshProgress() {
+  try {
+    const resp = await fetch('/api/progress', { headers: authHeaders() });
+    if (resp.status === 401) { logout(); return; }
+    const data = await resp.json();
+    if (data.progress) {
+      const p = data.progress;
+      const pct = (p.progressRate * 100).toFixed(1);
+      document.getElementById('progressPercent').textContent = pct + '%';
+      document.getElementById('progressBar').style.width = pct + '%';
+      document.getElementById('progressDetail').textContent =
+        `总时长: ${p.totalStudyTime}s | ${p.isFinish ? '✅ 已完成' : '⏳ 进行中'}`;
+      document.getElementById('resourceCount').textContent =
+        `${p.studyResourceNum} / ${p.resourceSum}`;
+    }
+    if (data.course_info) {
+      document.getElementById('courseName').textContent = data.course_info.name || '-';
+    }
+  } catch {}
+}
+
+// ── 启动任务 ────────────────────────────
+async function startTask(type) {
+  const url = type === 'learning' ? '/api/start-learning' : '/api/start-exam';
+  try {
+    const resp = await fetch(url, { method: 'POST', headers: authHeaders() });
+    const data = await resp.json();
+    if (!resp.ok) { alert(data.detail || '启动失败'); return; }
+    document.getElementById('logBody').innerHTML = '';
+    startSSE();
+  } catch (e) {
+    alert('网络错误: ' + e.message);
+  }
+}
+
+// ── SSE 实时日志 ────────────────────────
+function startSSE() {
+  if (evtSource) { evtSource.close(); }
+  evtSource = new EventSource('/api/stream?token=' + encodeURIComponent(JWT));
+  evtSource.onmessage = function(e) {
+    const data = JSON.parse(e.data);
+    if (data.type === 'status') {
+      updateStatus(data.status);
+    } else if (data.type === 'done') {
+      updateStatus(data.status);
+      evtSource.close();
+      evtSource = null;
+      refreshProgress();
+    } else if (data.type === undefined) {
+      appendLog(data.time, data.msg);
+    }
+  };
+  evtSource.onerror = function() {
+    evtSource.close();
+    evtSource = null;
+    startPolling();
+  };
+}
+
+// ── 轮询备用 ────────────────────────────
+let pollTimer = null;
+let logIdx = 0;
+
+function startPolling() {
+  if (pollTimer) return;
+  logIdx = 0;
+  pollTimer = setInterval(async () => {
+    try {
+      const resp = await fetch('/api/logs?idx=' + logIdx, { headers: authHeaders() });
+      const data = await resp.json();
+      data.logs.forEach(entry => appendLog(entry.time, entry.msg));
+      logIdx = data.new_idx;
+      updateStatus(data.status);
+      if (data.status === 'completed' || data.status === 'error' || data.status === 'idle') {
+        if (data.logs.length === 0) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+          refreshProgress();
+        }
+      }
+    } catch {}
+  }, 1000);
+}
+
+// ── UI 更新 ────────────────────────────
+function appendLog(time, msg) {
+  const body = document.getElementById('logBody');
+  const div = document.createElement('div');
+  div.className = 'log-entry' + (msg && msg.startsWith('[ERROR]') ? ' error' : '');
+  div.innerHTML = '<span class="time">' + escHtml(time || '') + '</span>' + escHtml(msg || '');
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+}
+
+function updateStatus(status) {
+  const label = { idle:'空闲', learning:'学习中', exam:'考试中', completed:'已完成', error:'出错' };
+  const badgeCls = { idle:'badge-idle', learning:'badge-learning', exam:'badge-exam', completed:'badge-completed', error:'badge-error' };
+  document.getElementById('taskStatus').textContent = label[status] || status;
+  const badge = document.getElementById('logBadge');
+  badge.textContent = label[status] || status;
+  badge.className = 'status-badge ' + (badgeCls[status] || 'badge-idle');
+  document.getElementById('btnLearning').disabled = (status === 'learning' || status === 'exam');
+  document.getElementById('btnExam').disabled = (status === 'learning' || status === 'exam');
+
+  if (status === 'learning' || status === 'exam') {
+    if (!progressTimer) progressTimer = setInterval(() => refreshProgress(), 1000);
+  } else {
+    if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+  }
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>
