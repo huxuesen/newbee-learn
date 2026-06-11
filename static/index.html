@@ -350,24 +350,21 @@
         </div>
       </div>
 
-      <!-- 操作按钮 -->
-      <div class="action-bar">
-        <button class="btn btn-success" id="btnLearning" onclick="startTask('learning')">▶ 开始刷课</button>
-        <button class="btn btn-danger" id="btnExam" onclick="startTask('exam')">📝 开始考试</button>
-      </div>
-      <div style="margin-bottom:16px;">
-      <button class="btn btn-outline" onclick="refreshProgress()" style="width:100%;">🔄 刷新进度</button>
-     </div>
+    <!-- 操作按钮 -->
+    <div class="action-bar">
+      <button class="btn btn-primary" id="btnLearnExam" onclick="startLearnExam()" style="flex:2;">▶ 开始刷课+考试</button>
+      <button class="btn btn-outline" onclick="refreshProgress()" style="flex:1;">🔄 刷新</button>
+    </div>
 
-      <!-- 证书区 -->
-      <div id="certSection" class="hidden" style="margin-bottom:16px;">
+      <!-- 证书区（始终可见） -->
+      <div id="certSection" style="margin-bottom:16px;">
         <div class="info-card full" style="border:2px solid #f59e0b; background:linear-gradient(135deg,#fffbeb,#fef3c7);">
           <div class="label" style="color:#92400e; font-size:1em;">🎓 获取学习证书</div>
           <div id="certForm" style="margin-top:12px;">
             <div style="display:flex; gap:8px; margin-bottom:12px;">
               <input type="text" id="certNameInput" placeholder="输入您的姓名（证书上显示）"
                      style="flex:1; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:15px;">
-              <button class="btn btn-success" onclick="createCert()">获取证书</button>
+              <button class="btn btn-success" onclick="createCert()">🎓 获取证书</button>
             </div>
             <div class="error-msg" id="certError"></div>
           </div>
@@ -402,6 +399,7 @@ let LOGGED_IN = false;
 let evtSource = null;
 let progressTimer = null;
 let certChecked = false;
+let certData = null;
 
 // ── 初始化 ──────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -488,9 +486,26 @@ async function handleBaomiLogin() {
 function logout() {
   JWT = '';
   LOGGED_IN = false;
+  PHONE = '';
+  NICKNAME = '';
   localStorage.removeItem('jwt_token');
   if (evtSource) { evtSource.close(); evtSource = null; }
   if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+  // 清理证书状态
+  certChecked = false;
+  certData = null;
+  document.getElementById('certSection').style.display = '';
+  document.getElementById('certForm').classList.remove('hidden');
+  document.getElementById('certPreview').classList.add('hidden');
+  document.getElementById('certNameInput').value = '';
+  document.getElementById('certError').textContent = '';
+  // 清理进度
+  document.getElementById('progressPercent').textContent = '--';
+  document.getElementById('progressBar').style.width = '0%';
+  document.getElementById('progressDetail').textContent = '-';
+  document.getElementById('taskStatus').textContent = '空闲';
+  document.getElementById('courseName').textContent = '-';
+  document.getElementById('logBody').innerHTML = '<div class="log-entry" style="color:#9ca3af;">等待操作...</div>';
   showLogin();
 }
 
@@ -529,8 +544,10 @@ async function refreshProgress() {
       const pct = (p.progressRate * 100).toFixed(1);
       document.getElementById('progressPercent').textContent = pct + '%';
       document.getElementById('progressBar').style.width = pct + '%';
+      // Bug fix: 进度100%时也显示已完成
+      const finished = p.isFinish || parseFloat(pct) >= 99.9;
       document.getElementById('progressDetail').textContent =
-        `总时长: ${p.totalStudyTime}s | ${p.isFinish ? '✅ 已完成' : '⏳ 进行中'}`;
+        `总时长: ${p.totalStudyTime}s | ${finished ? '✅ 已完成' : '⏳ 进行中'}`;
     }
     if (data.course_info) {
       document.getElementById('courseName').textContent = data.course_info.name || '-';
@@ -540,6 +557,24 @@ async function refreshProgress() {
 }
 
 // ── 启动任务 ────────────────────────────
+// ── 一键刷课+考试 ────────────────────────────
+async function startLearnExam() {
+  const btn = document.getElementById('btnLearnExam');
+  btn.disabled = true;
+  btn.textContent = '⏳ 执行中...';
+  try {
+    const resp = await fetch('/api/start-learn-exam', { method: 'POST', headers: authHeaders() });
+    const data = await resp.json();
+    if (!resp.ok) { alert(data.detail || '启动失败'); btn.disabled = false; btn.textContent = '▶ 开始刷课+考试'; return; }
+    document.getElementById('logBody').innerHTML = '';
+    startSSE();
+  } catch (e) {
+    alert('网络错误: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '▶ 开始刷课+考试';
+  }
+}
+
 async function startTask(type) {
   const url = type === 'learning' ? '/api/start-learning' : '/api/start-exam';
   try {
@@ -619,8 +654,9 @@ function updateStatus(status) {
   const badge = document.getElementById('logBadge');
   badge.textContent = label[status] || status;
   badge.className = 'status-badge ' + (badgeCls[status] || 'badge-idle');
-  document.getElementById('btnLearning').disabled = (status === 'learning' || status === 'exam');
-  document.getElementById('btnExam').disabled = (status === 'learning' || status === 'exam');
+  const busy = (status === 'learning' || status === 'exam');
+  document.getElementById('btnLearnExam').disabled = busy;
+  document.getElementById('btnLearnExam').textContent = busy ? '⏳ 执行中...' : '▶ 开始刷课+考试';
 
   if (status === 'learning' || status === 'exam') {
     if (!progressTimer) progressTimer = setInterval(() => refreshProgress(), 1000);

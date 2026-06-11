@@ -22,7 +22,7 @@ import config as app_config
 
 # ─── 配置 ────────────────────────────────────────────────────────────
 SECRET_KEY = os.environ.get("JWT_SECRET", "auto-baomiguan-secret-key-2026")
-AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "cbirc")
+AUTH_PASSWORD = os.environ.get("AUTH", "cbirc")
 COURSE_PACKET_ID = app_config.course_packet_id
 
 # ─── FastAPI ─────────────────────────────────────────────────────────
@@ -290,6 +290,77 @@ async def start_learning(request: Request):
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
     return {"message": "开始学习"}
+
+
+@app.post("/api/start-learn-exam")
+async def start_learn_exam(request: Request):
+    """一键刷课+考试：先学习，学习完成后自动考试。"""
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    if not token:
+        raise HTTPException(status_code=401, detail="未登录")
+    payload = decode_jwt(token)
+    sid = payload["sid"]
+    if sid not in sessions:
+        raise HTTPException(status_code=401, detail="会话已失效")
+    if not sessions[sid].get("baomi_token"):
+        raise HTTPException(status_code=400, detail="请先登录保密观账号")
+
+    with tasks_lock:
+        task = tasks.get(sid)
+        if not task:
+            tasks[sid] = {"status": "idle", "logs": [], "log_idx": 0, "course_info": None, "exam_result": None}
+            task = tasks[sid]
+        if task["status"] in ("learning", "exam"):
+            raise HTTPException(status_code=400, detail="当前有任务正在执行，请等待完成")
+        task["status"] = "learning"
+        task["logs"] = []
+        task["log_idx"] = 0
+        task["exam_result"] = None
+
+    def _run():
+        try:
+            sess = sessions[sid]
+            http_session = requests.Session(); http_session.timeout = 15
+
+            def web_logger(msg):
+                with tasks_lock:
+                    t = tasks[sid]
+                    t["logs"].append({"time": _now(), "msg": msg})
+
+            cm = CourseManager(http_session, sess["baomi_token"], logger=web_logger)
+
+            # 阶段一：刷课
+            cm._log(f"📚 开始自动学习课程... [{_now()}]")
+            success = cm.study_course(COURSE_PACKET_ID)
+            if success:
+                cm._log("✅ 课程学习完成！")
+            else:
+                cm._log("❌ 课程学习失败，请稍后重试")
+                with tasks_lock:
+                    tasks[sid]["status"] = "error"
+                return
+
+            # 阶段二：考试
+            with tasks_lock:
+                tasks[sid]["status"] = "exam"
+            cm._log(f"📝 开始自动完成考试... [{_now()}]")
+            success = cm.complete_exam(COURSE_PACKET_ID)
+            if success:
+                cm._log("🎉 刷课+考试全部完成！")
+                with tasks_lock:
+                    tasks[sid]["status"] = "completed"
+            else:
+                cm._log("❌ 考试失败，请稍后重试")
+                with tasks_lock:
+                    tasks[sid]["status"] = "error"
+        except Exception as e:
+            with tasks_lock:
+                tasks[sid]["logs"].append({"time": _now(), "msg": f"[ERROR] 异常: {e}"})
+                tasks[sid]["status"] = "error"
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return {"message": "开始刷课+考试"}
 
 
 @app.post("/api/start-exam")
