@@ -87,6 +87,7 @@ def check_baomi_token(session: requests.Session, token: str):
         resp = session.get(
             "https://www.baomi.org.cn/portal/main-api/checkToken.do",
             headers=headers,
+            timeout=15,
         ).json()
         if resp.get("result"):
             return resp["data"].get("nickName") or "未设定姓名"
@@ -133,7 +134,7 @@ async def auth_login(req: BaomiLoginReq, request: Request):
         raise HTTPException(status_code=400, detail=f"保密观登录失败: {e}")
 
     # 验证 token 并获取昵称
-    http_session = requests.Session()
+    http_session = requests.Session(); http_session.timeout = 15
     nickname = check_baomi_token(http_session, baomi_token)
     if not nickname:
         raise HTTPException(status_code=400, detail="保密观 token 校验失败")
@@ -197,7 +198,7 @@ async def get_progress(request: Request):
         raise HTTPException(status_code=401, detail="会话已失效")
 
     sess = sessions[sid]
-    http_session = requests.Session()
+    http_session = requests.Session(); http_session.timeout = 15
     cm = CourseManager(http_session, sess["baomi_token"])
 
     # 获取课程进度
@@ -258,7 +259,7 @@ async def start_learning(request: Request):
     def _run():
         try:
             sess = sessions[sid]
-            http_session = requests.Session()
+            http_session = requests.Session(); http_session.timeout = 15
 
             def web_logger(msg):
                 with tasks_lock:
@@ -313,7 +314,7 @@ async def start_exam(request: Request):
     def _run():
         try:
             sess = sessions[sid]
-            http_session = requests.Session()
+            http_session = requests.Session(); http_session.timeout = 15
 
             def web_logger(msg):
                 with tasks_lock:

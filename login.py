@@ -25,7 +25,7 @@ def rsa_encrypt_pkcs1v15(data: str, public_key: str) -> str:
 def encrypt(data):
     try:
         key_url = "https://www.baomi.org.cn/portal/main-api/getPublishKey.do"
-        response = requests.get(key_url)
+        response = requests.get(key_url, timeout=10)
         if response.status_code != 200:
             logging.error(f"获取公钥失败，状态码: {response.status_code}")
             return None
@@ -55,7 +55,7 @@ def login(loginName, passWord):
             "Content-Type": "application/json",
             "siteId": "95",
         }
-        response = requests.post(login_url, json=payload, headers=headers)
+        response = requests.post(login_url, json=payload, headers=headers, timeout=15)
         if response.status_code != 200:
             logging.error(f"登录请求失败，状态码: {response.status_code}")
             raise Exception(f"登录请求失败，状态码: {response.status_code}")
