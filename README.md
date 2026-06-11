@@ -1,9 +1,9 @@
 # newbee-learn
 
-[bm观](https://www.baomi.org.cn) 自动刷课、答题脚本。
+[BM观](https://www.baomi.org.cn) 自动刷课、答题脚本。
 
 > [!IMPORTANT]
-> 此脚本适用于 [2026 年度全国bm教育线上培训](https://www.baomi.org.cn/bmCourseDetail/info?id=312bc914-8e11-421b-b9bc-e900fe1a4e50)
+> 此脚本适用于 [2026 年度全国BM教育线上培训](https://www.baomi.org.cn/BMCourseDetail/info?id=312bc914-8e11-421b-b9bc-e900fe1a4e50)
 
 ## 功能
 
