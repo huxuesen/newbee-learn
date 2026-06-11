@@ -335,10 +335,7 @@
           </div>
           <div style="margin-top:6px; font-size:.78em; color:var(--text-dim)" id="progressDetail">-</div>
         </div>
-        <div class="info-card">
-          <div class="label">已学 / 总计</div>
-          <div class="value green" id="resourceCount">--</div>
-        </div>
+
         <div class="info-card">
           <div class="label">任务状态</div>
           <div class="value yellow" id="taskStatus">空闲</div>
@@ -509,8 +506,6 @@ async function refreshProgress() {
       document.getElementById('progressBar').style.width = pct + '%';
       document.getElementById('progressDetail').textContent =
         `总时长: ${p.totalStudyTime}s | ${p.isFinish ? '✅ 已完成' : '⏳ 进行中'}`;
-      document.getElementById('resourceCount').textContent =
-        `${p.studyResourceNum} / ${p.resourceSum}`;
     }
     if (data.course_info) {
       document.getElementById('courseName').textContent = data.course_info.name || '-';
