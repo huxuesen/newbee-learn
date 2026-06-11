@@ -55,6 +55,10 @@ class StartTaskReq(BaseModel):
     task_type: str  # "learning" 或 "exam"
 
 
+class CertNameReq(BaseModel):
+    cert_name: str  # 用户姓名，用于证书
+
+
 # ─── JWT 工具 ─────────────────────────────────────────────────────────
 def create_jwt(session_id: str, phone: str) -> str:
     payload = {
@@ -427,6 +431,148 @@ async def get_logs(request: Request, idx: int = 0):
         "status": status,
         "new_idx": idx + len(logs),
     }
+
+
+# ─── 证书 API ──────────────────────────────────────────────────────────
+def _baomi_headers(token: str) -> dict:
+    return {
+        "token": token,
+        "authToken": token,
+        "siteId": "95",
+    }
+
+
+@app.get("/api/certificate/check")
+async def certificate_check(request: Request):
+    """检查用户是否已有证书。"""
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    if not token:
+        raise HTTPException(status_code=401, detail="未登录")
+    payload = decode_jwt(token)
+    sid = payload["sid"]
+    if sid not in sessions:
+        raise HTTPException(status_code=401, detail="会话已失效")
+
+    baomi_token = sessions[sid].get("baomi_token", "")
+    if not baomi_token:
+        raise HTTPException(status_code=400, detail="请先登录保密观账号")
+
+    try:
+        url = "https://www.baomi.org.cn/portal/api/v2/coursePacket/getUserCourseCertRecord"
+        resp = requests.get(
+            url,
+            params={"coursePacketId": COURSE_PACKET_ID, "token": baomi_token},
+            headers=_baomi_headers(baomi_token),
+            timeout=15,
+        ).json()
+        if resp.get("status") == 0 and resp.get("data"):
+            return {"has_cert": True, "cert_data": resp["data"]}
+        return {"has_cert": False, "cert_data": None}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"查询证书失败: {e}")
+
+
+@app.post("/api/certificate/create")
+async def certificate_create(req: CertNameReq, request: Request):
+    """创建证书。"""
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    if not token:
+        raise HTTPException(status_code=401, detail="未登录")
+    payload = decode_jwt(token)
+    sid = payload["sid"]
+    if sid not in sessions:
+        raise HTTPException(status_code=401, detail="会话已失效")
+
+    baomi_token = sessions[sid].get("baomi_token", "")
+    if not baomi_token:
+        raise HTTPException(status_code=400, detail="请先登录保密观账号")
+
+    # a. 获取考试成绩
+    exam_score = 0
+    try:
+        score_resp = requests.get(
+            "https://www.baomi.org.cn/portal/main-api/v2/coursePacket/getUserStudyCourseScore",
+            params={"coursePacketId": COURSE_PACKET_ID, "token": baomi_token},
+            headers=_baomi_headers(baomi_token),
+            timeout=15,
+        ).json()
+        if score_resp.get("status") == 0 and score_resp.get("data"):
+            exam_score = score_resp["data"].get("examScore", 0) or score_resp["data"].get("totalScore", 0) or 0
+    except Exception:
+        pass
+
+    # b. 构建证书信息
+    cert_info = {
+        "certificateNo": None,
+        "courseId": "312bc914-8e11-421b-b9bc-e900fe1a4e50",
+        "courseName": "2026年度全国保密教育线上培训",
+        "totalGrade": 5.4,
+        "trainStartDate": 1780588800000,
+        "trainEndDate": 1793375999000,
+        "examId": None,
+        "examName": None,
+        "examTime": None,
+        "publishExam": 1,
+        "examScore": exam_score,
+        "examScoreText": "优秀",
+        "userName": req.cert_name,
+        "userMobileNo": None,
+    }
+
+    # c. 保存证书记录
+    try:
+        save_resp = requests.post(
+            "https://www.baomi.org.cn/portal/api/v2/coursePacket/saveUserCourseCertRecord",
+            files={
+                "coursePacketId": (None, COURSE_PACKET_ID),
+                "certificateInfo": (None, json.dumps(cert_info, ensure_ascii=False)),
+            },
+            headers=_baomi_headers(baomi_token),
+            timeout=15,
+        ).json()
+        if save_resp.get("status") == 0 and save_resp.get("data"):
+            data = save_resp["data"]
+            return {
+                "certificateNo": data.get("certificateNo", ""),
+                "obtainCertDate": data.get("obtainCertDate", ""),
+                "userName": req.cert_name,
+                "examScore": exam_score,
+                "message": "操作成功",
+            }
+        else:
+            detail = save_resp.get("message") or save_resp.get("msg") or "保存失败"
+            raise HTTPException(status_code=400, detail=detail)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"保存证书失败: {e}")
+
+
+@app.get("/api/certificate/template")
+async def certificate_template(request: Request):
+    """获取证书模板。"""
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    if not token:
+        raise HTTPException(status_code=401, detail="未登录")
+    payload = decode_jwt(token)
+    sid = payload["sid"]
+    if sid not in sessions:
+        raise HTTPException(status_code=401, detail="会话已失效")
+
+    baomi_token = sessions[sid].get("baomi_token", "")
+    if not baomi_token:
+        raise HTTPException(status_code=400, detail="请先登录保密观账号")
+
+    try:
+        resp = requests.get(
+            "https://www.baomi.org.cn/portal/main-api/v2/coursePacket/getCertificateTemplate",
+            params={"coursePacketId": COURSE_PACKET_ID},
+            headers=_baomi_headers(baomi_token),
+            timeout=15,
+        ).json()
+        return resp
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取模板失败: {e}")
 
 
 # ─── 启动 ────────────────────────────────────────────────────────────

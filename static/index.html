@@ -275,6 +275,10 @@
     .baomi-login-row { flex-direction:column; }
     .baomi-login-row .btn { width:100%; }
   }
+
+  #certSection .info-card { position: relative; }
+  #certCanvas { transition: transform 0.2s; }
+  #certCanvas:hover { transform: scale(1.02); }
 </style>
 </head>
 <body>
@@ -352,7 +356,27 @@
         <button class="btn btn-danger" id="btnExam" onclick="startTask('exam')">📝 开始考试</button>
       </div>
       <div style="margin-bottom:16px;">
-        <button class="btn btn-outline" onclick="refreshProgress()" style="width:100%;">🔄 刷新进度</button>
+      <button class="btn btn-outline" onclick="refreshProgress()" style="width:100%;">🔄 刷新进度</button>
+     </div>
+
+      <!-- 证书区 -->
+      <div id="certSection" class="hidden" style="margin-bottom:16px;">
+        <div class="info-card full" style="border:2px solid #f59e0b; background:linear-gradient(135deg,#fffbeb,#fef3c7);">
+          <div class="label" style="color:#92400e; font-size:1em;">🎓 获取学习证书</div>
+          <div id="certForm" style="margin-top:12px;">
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+              <input type="text" id="certNameInput" placeholder="输入您的姓名（证书上显示）"
+                     style="flex:1; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:15px;">
+              <button class="btn btn-success" onclick="createCert()">获取证书</button>
+            </div>
+            <div class="error-msg" id="certError"></div>
+          </div>
+          <div id="certPreview" class="hidden" style="text-align:center; margin-top:12px;">
+            <canvas id="certCanvas" style="max-width:100%; border:1px solid #d1d5db; border-radius:8px; cursor:pointer;" onclick="downloadCert()"></canvas>
+            <p style="margin-top:8px; font-size:.85em; color:#6b7280;">👆 点击证书图片下载到本地</p>
+            <div id="certInfo" style="margin-top:8px; font-size:.85em; color:#374151;"></div>
+          </div>
+        </div>
       </div>
 
       <!-- 日志 -->
@@ -377,6 +401,7 @@ let NICKNAME = '';
 let LOGGED_IN = false;
 let evtSource = null;
 let progressTimer = null;
+let certChecked = false;
 
 // ── 初始化 ──────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -510,6 +535,7 @@ async function refreshProgress() {
     if (data.course_info) {
       document.getElementById('courseName').textContent = data.course_info.name || '-';
     }
+    if (!certChecked) { certChecked = true; checkCert(); }
   } catch {}
 }
 
@@ -607,6 +633,138 @@ function escHtml(s) {
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+// ── 证书功能 ────────────────────────────
+let certData = null;
+
+async function checkCert() {
+  try {
+    const resp = await fetch('/api/certificate/check', { headers: authHeaders() });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.has_cert) {
+      document.getElementById('certSection').classList.remove('hidden');
+      document.getElementById('certForm').classList.add('hidden');
+      certData = data.cert_data;
+      await renderCertPreview(data.cert_data);
+    } else {
+      document.getElementById('certSection').classList.remove('hidden');
+      document.getElementById('certForm').classList.remove('hidden');
+    }
+  } catch {}
+}
+
+async function createCert() {
+  const name = document.getElementById('certNameInput').value.trim();
+  const err = document.getElementById('certError');
+  if (!name) { err.textContent = '请输入姓名'; return; }
+  err.textContent = '';
+
+  try {
+    const resp = await fetch('/api/certificate/create', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cert_name: name }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { err.textContent = data.detail || '获取证书失败'; return; }
+
+    certData = data;
+    document.getElementById('certForm').classList.add('hidden');
+    await renderCertPreview(data);
+  } catch (e) {
+    err.textContent = '网络错误: ' + e.message;
+  }
+}
+
+async function renderCertPreview(certInfo) {
+  const canvas = document.getElementById('certCanvas');
+  const ctx = canvas.getContext('2d');
+
+  const resp = await fetch('/api/certificate/template', { headers: authHeaders() });
+  const tplData = await resp.json();
+  const tpl = tplData.data || tplData;
+
+  const bgUrl = tpl.certificateBackground;
+  const bgImg = new Image();
+  bgImg.crossOrigin = 'anonymous';
+
+  bgImg.onload = function() {
+    const maxWidth = Math.min(800, window.innerWidth - 40);
+    const scale = maxWidth / bgImg.width;
+    canvas.width = maxWidth;
+    canvas.height = bgImg.width * bgImg.height / bgImg.width * scale || bgImg.height * scale;
+
+    ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+
+    const w = canvas.width;
+    const h = canvas.height;
+
+    const userName = certInfo.userName || certInfo.cert_name || document.getElementById('certNameInput').value || '';
+    const certNo = certInfo.certificateNo || '';
+    const certDate = certInfo.obtainCertDate || certInfo.certificateDate || '';
+    const examScore = certInfo.examScore || 100;
+    const certName = tpl.certificateName || '保密教育培训证书';
+    const organ = tpl.certificateOrgan || '';
+
+    const fields = tpl.template || [];
+    fields.forEach(f => {
+      const x = parseFloat(f.x_coordinate) * w;
+      const y = parseFloat(f.y_coordinate) * h;
+      const fontSize = parseFloat(f.fontSize) * (w / 800) * 2.2;
+
+      ctx.fillStyle = f.color || '#000';
+      ctx.font = fontSize + 'px "FangSong", "STFangsong", serif';
+      ctx.textAlign = f.alignment || 'start';
+
+      let text = f.name || '';
+      if (f.id === 'userName') text = userName + '同志：';
+      else if (f.id === 'certificateContent') text = '    您已完成' + (tpl.hasExamName ? certName : '保密教育培训') + '课程，考试成绩' + examScore + '分。\n    特颁此证。';
+      else if (f.id === 'certificateNo') text = '证书号：' + certNo;
+      else if (f.id === 'certificateDate') text = '发证时间：' + certDate;
+      else if (f.id === 'company') text = organ;
+      else if (f.id === 'certificateName') text = certName;
+
+      const lines = text.split('\n');
+      lines.forEach((line, i) => {
+        const ly = y + i * fontSize * 1.4;
+        if (f.alignment === 'center') {
+          ctx.fillText(line, w / 2, ly);
+        } else if (f.alignment === 'end') {
+          const rightMargin = parseFloat(f.rightSpace || 0) * w;
+          ctx.fillText(line, w - rightMargin, ly);
+        } else {
+          const leftMargin = parseFloat(f.leftSpace || 0) * w;
+          ctx.fillText(line, leftMargin, ly);
+        }
+      });
+    });
+
+    document.getElementById('certPreview').classList.remove('hidden');
+    document.getElementById('certInfo').innerHTML =
+      '证书编号: <b>' + escHtml(certNo) + '</b> | 发证时间: <b>' + escHtml(certDate) + '</b>';
+  };
+
+  bgImg.onerror = function() {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#000';
+    ctx.font = '20px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('证书预览', canvas.width/2, 40);
+    document.getElementById('certPreview').classList.remove('hidden');
+  };
+
+  bgImg.src = bgUrl;
+}
+
+function downloadCert() {
+  const canvas = document.getElementById('certCanvas');
+  const link = document.createElement('a');
+  link.download = '学习证书_' + (certData && certData.certificateNo || 'unknown') + '.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
 }
 </script>
 </body>
