@@ -778,9 +778,13 @@ async function renderCertPreview(certInfo) {
       ctx.textAlign = f.alignment || 'start';
 
       let text = f.name || '';
-      if (f.id === 'userName') text = userName + '同志：';
-      else if (f.id === 'certificateContent') text = '    您已完成' + (tpl.hasExamName ? certName : '保密教育培训') + '课程，考试成绩' + (certInfo.examScoreText || examScore + '分') + '。\n    特颁此证。';
-      else if (f.id === 'certificateNo') text = '证书号：' + certNo;
+      if (f.id === 'userName') text = (f.name || '').replace('XXX', userName);
+      else if (f.id === 'certificateContent') {
+        text = (f.name || '')
+          .replace('trainName', certInfo.courseName || '保密教育培训')
+          .replace('examResult', certInfo.examScoreText || examScore + '分');
+      }
+      else if (f.id === 'certificateNo') text = (f.name || '').replace('certificateNo', certNo);
       else if (f.id === 'certificateDate') text = '发证时间：' + certDate;
       else if (f.id === 'company') text = organ;
       else if (f.id === 'certificateName') text = certName;
