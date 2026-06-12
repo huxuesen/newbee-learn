@@ -582,8 +582,8 @@ async def start_all(request: Request):
                         except Exception:
                             pass
 
-                        # 第二步：更新证书（带完整字段，userName=null）
-                        cert_info_s2 = {
+                        # 第三步：用真实模板+userName保存最终证书
+                        cert_info_final = {
                             "certificateId": tpl_id,
                             "certificateName": cert_name_tpl,
                             "certificateDate": cert_date,
@@ -597,31 +597,19 @@ async def start_all(request: Request):
                             "publishExam": 1,
                             "examScore": exam_score,
                             "examScoreText": "优秀",
-                            "userName": None,
+                            "userName": cert_name,
                             "userMobileNo": phone,
                             "obtainCertDate": cert_date,
                         }
-                        try:
-                            http_session.post(
-                                "https://www.baomi.org.cn/portal/api/v2/coursePacket/saveUserCourseCertRecord",
-                                files={"coursePacketId": (None, COURSE_PACKET_ID), "certificateInfo": (None, json.dumps(cert_info_s2, ensure_ascii=False))},
-                                headers=hdrs, timeout=15,
-                            ).json()
-                        except Exception:
-                            pass
-
-                        # 第三步：最终保存（userName=姓名）
-                        cert_info_s3 = dict(cert_info_s2)
-                        cert_info_s3["userName"] = cert_name
-                        save3 = http_session.post(
+                        save_final = http_session.post(
                             "https://www.baomi.org.cn/portal/api/v2/coursePacket/saveUserCourseCertRecord",
-                            files={"coursePacketId": (None, COURSE_PACKET_ID), "certificateInfo": (None, json.dumps(cert_info_s3, ensure_ascii=False))},
+                            files={"coursePacketId": (None, COURSE_PACKET_ID), "certificateInfo": (None, json.dumps(cert_info_final, ensure_ascii=False))},
                             headers=hdrs, timeout=15,
                         ).json()
-                        if save3.get("status") == 0:
+                        if save_final.get("status") == 0:
                             cm._log("✅ 证书获取成功！")
                         else:
-                            cm._log(f"⚠️ 证书保存失败: {save3.get('message', '未知结果')}")
+                            cm._log(f"⚠️ 证书保存失败: {save_final.get('message', '未知结果')}")
                 except Exception as e:
                     cm._log(f"⚠️ 证书获取异常: {e}")
             else:
@@ -768,10 +756,10 @@ async def certificate_check(request: Request):
 
 @app.post("/api/certificate/create")
 async def certificate_create(req: CertNameReq, request: Request):
-    """创建证书。按照HAR抓包的3步流程：
-    1. saveUserCourseCertRecord (userName=null, certificateNo=null) → 创建证书
-    2. saveUserCourseCertRecord (带完整字段, userName=null) → 更新元数据
-    3. saveUserCourseCertRecord (带完整字段, userName=姓名) → 最终版
+    """创建证书。3步流程：
+    1. saveUserCourseCertRecord (userName=null) → 创建证书，获取certificateNo
+    2. getCertificateTemplate → 获取考完试后的真实证书模板
+    3. saveUserCourseCertRecord (模板+userName) → 最终正确证书
     """
     token = request.headers.get("Authorization", "").replace("Bearer ", "")
     if not token:
@@ -850,8 +838,8 @@ async def certificate_create(req: CertNameReq, request: Request):
     except Exception:
         pass
 
-    # d. 第二步：更新证书（带完整字段，userName=null）
-    cert_info_step2 = {
+    # d. 第三步：用真实模板+userName保存最终证书
+    cert_info_final = {
         "certificateId": cert_template_id,
         "certificateName": cert_name_tpl,
         "certificateDate": cert_date,
@@ -865,37 +853,25 @@ async def certificate_create(req: CertNameReq, request: Request):
         "publishExam": 1,
         "examScore": exam_score,
         "examScoreText": "优秀",
-        "userName": None,
+        "userName": req.cert_name,
         "userMobileNo": phone,
         "obtainCertDate": cert_date,
     }
     try:
-        requests.post(
+        save_final = requests.post(
             "https://www.baomi.org.cn/portal/api/v2/coursePacket/saveUserCourseCertRecord",
-            files={"coursePacketId": (None, COURSE_PACKET_ID), "certificateInfo": (None, json.dumps(cert_info_step2, ensure_ascii=False))},
+            files={"coursePacketId": (None, COURSE_PACKET_ID), "certificateInfo": (None, json.dumps(cert_info_final, ensure_ascii=False))},
             headers=headers, timeout=15,
         ).json()
-    except Exception:
-        pass
-
-    # e. 第三步：最终保存（userName=姓名）
-    cert_info_step3 = dict(cert_info_step2)
-    cert_info_step3["userName"] = req.cert_name
-    try:
-        save3 = requests.post(
-            "https://www.baomi.org.cn/portal/api/v2/coursePacket/saveUserCourseCertRecord",
-            files={"coursePacketId": (None, COURSE_PACKET_ID), "certificateInfo": (None, json.dumps(cert_info_step3, ensure_ascii=False))},
-            headers=headers, timeout=15,
-        ).json()
-        if save3.get("status") != 0:
-            raise HTTPException(status_code=400, detail=save3.get("message") or "保存证书失败")
-        data3 = save3["data"]
-        cert_date_final = data3.get("obtainCertDate", cert_date_raw)
+        if save_final.get("status") != 0:
+            raise HTTPException(status_code=400, detail=save_final.get("message") or "保存证书失败")
+        data_f = save_final["data"]
+        cert_date_final = data_f.get("obtainCertDate", cert_date_raw)
         if isinstance(cert_date_final, (int, float)):
             from datetime import datetime
             cert_date_final = datetime.fromtimestamp(cert_date_final / 1000).strftime("%Y-%m-%d %H:%M:%S")
         return {
-            "certificateNo": data3.get("certificateNo", cert_no),
+            "certificateNo": data_f.get("certificateNo", cert_no),
             "obtainCertDate": cert_date_final,
             "userName": req.cert_name,
             "examScore": exam_score,
