@@ -534,7 +534,8 @@ async def start_all(request: Request):
                     except Exception:
                         pass
 
-                    cert_info = {
+                    # 第一步：创建证书
+                    cert_info_s1 = {
                         "certificateNo": None,
                         "courseId": "312bc914-8e11-421b-b9bc-e900fe1a4e50",
                         "courseName": "2026年度全国保密教育线上培训",
@@ -545,22 +546,74 @@ async def start_all(request: Request):
                         "publishExam": 1,
                         "examScore": exam_score,
                         "examScoreText": "优秀",
-                        "userName": cert_name,
+                        "userName": None,
                         "userMobileNo": None,
                     }
-                    save_resp = http_session.post(
+                    save1 = http_session.post(
                         "https://www.baomi.org.cn/portal/api/v2/coursePacket/saveUserCourseCertRecord",
                         files={
                             "coursePacketId": (None, COURSE_PACKET_ID),
-                            "certificateInfo": (None, json.dumps(cert_info, ensure_ascii=False)),
+                            "certificateInfo": (None, json.dumps(cert_info_s1, ensure_ascii=False)),
                         },
                         headers=_baomi_headers(sess["baomi_token"]),
                         timeout=15,
                     ).json()
-                    if save_resp.get("status") == 0:
-                        cm._log("✅ 证书获取成功！")
+                    if save1.get("status") != 0:
+                        cm._log(f"⚠️ 证书创建失败: {save1.get('message', '未知')}")
                     else:
-                        cm._log(f"⚠️ 证书获取: {save_resp.get('message', '未知结果')}")
+                        cert_no = save1["data"].get("certificateNo", "")
+                        cert_date_raw = save1["data"].get("obtainCertDate", "")
+                        if isinstance(cert_date_raw, (int, float)):
+                            from datetime import datetime
+                            cert_date = datetime.fromtimestamp(cert_date_raw / 1000).strftime("%Y-%m-%d %H:%M:%S")
+                        else:
+                            cert_date = str(cert_date_raw)
+
+                        # 获取模板 ID
+                        tpl_id = "8aaa268e804a98f901804b138392064b"  # fallback
+                        try:
+                            tpl_r = http_session.get(
+                                "https://www.baomi.org.cn/portal/main-api/v2/coursePacket/getCertificateTemplate",
+                                params={"coursePacketId": COURSE_PACKET_ID},
+                                headers=_baomi_headers(sess["baomi_token"]),
+                                timeout=15,
+                            ).json()
+                            if tpl_r.get("status") == 0 and tpl_r.get("data"):
+                                tpl_id = tpl_r["data"].get("id", tpl_id)
+                        except Exception:
+                            pass
+
+                        # 第二步：更新姓名
+                        cert_info_s2 = {
+                            "certificateId": tpl_id,
+                            "certificateName": "保密教育培训证书",
+                            "certificateDate": cert_date,
+                            "certificateNo": cert_no,
+                            "courseId": "312bc914-8e11-421b-b9bc-e900fe1a4e50",
+                            "courseName": "2026年度全国保密教育线上培训",
+                            "totalGrade": 5.4,
+                            "trainStartDate": 1780588800000,
+                            "trainEndDate": 1793375999000,
+                            "examId": None, "examName": None, "examTime": None,
+                            "publishExam": 1,
+                            "examScore": exam_score,
+                            "examScoreText": "优秀",
+                            "userName": cert_name,
+                            "userMobileNo": None,
+                        }
+                        save2 = http_session.post(
+                            "https://www.baomi.org.cn/portal/api/v2/coursePacket/saveUserCourseCertRecord",
+                            files={
+                                "coursePacketId": (None, COURSE_PACKET_ID),
+                                "certificateInfo": (None, json.dumps(cert_info_s2, ensure_ascii=False)),
+                            },
+                            headers=_baomi_headers(sess["baomi_token"]),
+                            timeout=15,
+                        ).json()
+                        if save2.get("status") == 0:
+                            cm._log("✅ 证书获取成功！")
+                        else:
+                            cm._log(f"⚠️ 证书更新姓名: {save2.get('message', '未知结果')}")
                 except Exception as e:
                     cm._log(f"⚠️ 证书获取异常: {e}")
             else:
@@ -734,9 +787,73 @@ async def certificate_create(req: CertNameReq, request: Request):
     except Exception:
         pass
 
-    # b. 构建证书信息
-    cert_info = {
+    # b. 第一步：创建证书（userName=null）
+    cert_info_step1 = {
         "certificateNo": None,
+        "courseId": "312bc914-8e11-421b-b9bc-e900fe1a4e50",
+        "courseName": "2026年度全国保密教育线上培训",
+        "totalGrade": 5.4,
+        "trainStartDate": 1780588800000,
+        "trainEndDate": 1793375999000,
+        "examId": None,
+        "examName": None,
+        "examTime": None,
+        "publishExam": 1,
+        "examScore": exam_score,
+        "examScoreText": "优秀",
+        "userName": None,
+        "userMobileNo": None,
+    }
+
+    try:
+        save1_resp = requests.post(
+            "https://www.baomi.org.cn/portal/api/v2/coursePacket/saveUserCourseCertRecord",
+            files={
+                "coursePacketId": (None, COURSE_PACKET_ID),
+                "certificateInfo": (None, json.dumps(cert_info_step1, ensure_ascii=False)),
+            },
+            headers=_baomi_headers(baomi_token),
+            timeout=15,
+        ).json()
+        if save1_resp.get("status") != 0:
+            detail = save1_resp.get("message") or save1_resp.get("msg") or "创建证书失败"
+            raise HTTPException(status_code=400, detail=detail)
+
+        cert_data = save1_resp["data"]
+        cert_no = cert_data.get("certificateNo", "")
+        cert_date_raw = cert_data.get("obtainCertDate", "")
+        # 时间戳转字符串
+        if isinstance(cert_date_raw, (int, float)):
+            from datetime import datetime
+            cert_date = datetime.fromtimestamp(cert_date_raw / 1000).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            cert_date = str(cert_date_raw)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"创建证书失败: {e}")
+
+    # c. 获取模板 ID
+    cert_template_id = "8aaa268e804a98f901804b138392064b"  # fallback
+    try:
+        tpl_resp = requests.get(
+            "https://www.baomi.org.cn/portal/main-api/v2/coursePacket/getCertificateTemplate",
+            params={"coursePacketId": COURSE_PACKET_ID},
+            headers=_baomi_headers(baomi_token),
+            timeout=15,
+        ).json()
+        if tpl_resp.get("status") == 0 and tpl_resp.get("data"):
+            cert_template_id = tpl_resp["data"].get("id", cert_template_id)
+    except Exception:
+        pass
+
+    # d. 第二步：更新证书（设置姓名）
+    cert_info_step2 = {
+        "certificateId": cert_template_id,
+        "certificateName": "保密教育培训证书",
+        "certificateDate": cert_date,
+        "certificateNo": cert_no,
         "courseId": "312bc914-8e11-421b-b9bc-e900fe1a4e50",
         "courseName": "2026年度全国保密教育线上培训",
         "totalGrade": 5.4,
@@ -752,33 +869,37 @@ async def certificate_create(req: CertNameReq, request: Request):
         "userMobileNo": None,
     }
 
-    # c. 保存证书记录
     try:
-        save_resp = requests.post(
+        save2_resp = requests.post(
             "https://www.baomi.org.cn/portal/api/v2/coursePacket/saveUserCourseCertRecord",
             files={
                 "coursePacketId": (None, COURSE_PACKET_ID),
-                "certificateInfo": (None, json.dumps(cert_info, ensure_ascii=False)),
+                "certificateInfo": (None, json.dumps(cert_info_step2, ensure_ascii=False)),
             },
             headers=_baomi_headers(baomi_token),
             timeout=15,
         ).json()
-        if save_resp.get("status") == 0 and save_resp.get("data"):
-            data = save_resp["data"]
-            return {
-                "certificateNo": data.get("certificateNo", ""),
-                "obtainCertDate": data.get("obtainCertDate", ""),
-                "userName": req.cert_name,
-                "examScore": exam_score,
-                "message": "操作成功",
-            }
-        else:
-            detail = save_resp.get("message") or save_resp.get("msg") or "保存失败"
+        if save2_resp.get("status") != 0:
+            detail = save2_resp.get("message") or save2_resp.get("msg") or "更新证书姓名失败"
             raise HTTPException(status_code=400, detail=detail)
+
+        data2 = save2_resp["data"]
+        cert_date_final = data2.get("obtainCertDate", cert_date_raw)
+        if isinstance(cert_date_final, (int, float)):
+            from datetime import datetime
+            cert_date_final = datetime.fromtimestamp(cert_date_final / 1000).strftime("%Y-%m-%d %H:%M:%S")
+
+        return {
+            "certificateNo": data2.get("certificateNo", cert_no),
+            "obtainCertDate": cert_date_final,
+            "userName": req.cert_name,
+            "examScore": exam_score,
+            "message": "操作成功",
+        }
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"保存证书失败: {e}")
+        raise HTTPException(status_code=500, detail=f"更新证书姓名失败: {e}")
 
 
 @app.get("/api/certificate/template")
