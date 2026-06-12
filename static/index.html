@@ -771,7 +771,7 @@ async function renderCertPreview(certInfo) {
     fields.forEach(f => {
       const x = parseFloat(f.x_coordinate) * w;
       const y = parseFloat(f.y_coordinate) * h;
-      const fontSize = parseFloat(f.fontSize) * (w / 800) * 3.0;
+      const fontSize = parseFloat(f.fontSize) * (w / 800) * 2.8;
 
       ctx.fillStyle = f.color || '#000';
       ctx.font = fontSize + 'px "FangSong", "STFangsong", serif';
