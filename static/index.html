@@ -358,7 +358,7 @@
 
     <!-- 操作按钮 -->
     <div class="action-bar">
-      <button class="btn btn-primary" id="btnLearnExam" onclick="startLearnExam()" style="flex:2;">▶ 开始刷课+考试</button>
+      <button class="btn btn-primary" id="btnLearnExam" onclick="startAll()" style="flex:2;">▶ 一键刷课+考试+证书</button>
       <button class="btn btn-outline" onclick="refreshProgress()" style="flex:1;">🔄 刷新</button>
     </div>
 
@@ -455,8 +455,9 @@ async function handleAccess(e) {
 async function handleBaomiLogin() {
   const btn = document.getElementById('baomiLoginBtn');
   const err = document.getElementById('baomiError');
-  const phone = document.getElementById('phone').value.trim();
+    const phone = document.getElementById('phone').value.trim();
   const pwd = document.getElementById('baomiPassword').value;
+  const certName = document.getElementById('certNameInput').value.trim();
   if (!phone || !pwd) { err.textContent = '请填写手机号和密码'; return; }
   btn.disabled = true;
   btn.textContent = '登录中...';
@@ -465,7 +466,7 @@ async function handleBaomiLogin() {
     const resp = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, password: pwd }),
+      body: JSON.stringify({ phone, password: pwd, cert_name: certName }),
     });
     const data = await resp.json();
     if (!resp.ok) { err.textContent = data.detail || '登录失败'; return; }
@@ -559,7 +560,24 @@ async function refreshProgress() {
 }
 
 // ── 启动任务 ────────────────────────────
-// ── 一键刷课+考试 ────────────────────────────
+// ── 一键全流程 ────────────────────────────
+async function startAll() {
+  const btn = document.getElementById('btnLearnExam');
+  btn.disabled = true;
+  btn.textContent = '⏳ 执行中...';
+  try {
+    const resp = await fetch('/api/start-all', { method: 'POST', headers: authHeaders() });
+    const data = await resp.json();
+    if (!resp.ok) { alert(data.detail || '启动失败'); btn.disabled = false; btn.textContent = '▶ 一键刷课+考试+证书'; return; }
+    document.getElementById('logBody').innerHTML = '';
+    startSSE();
+  } catch (e) {
+    alert('网络错误: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '▶ 一键刷课+考试+证书';
+  }
+}
+
 async function startLearnExam() {
   const btn = document.getElementById('btnLearnExam');
   btn.disabled = true;
@@ -658,7 +676,7 @@ function updateStatus(status) {
   badge.className = 'status-badge ' + (badgeCls[status] || 'badge-idle');
   const busy = (status === 'learning' || status === 'exam');
   document.getElementById('btnLearnExam').disabled = busy;
-  document.getElementById('btnLearnExam').textContent = busy ? '⏳ 执行中...' : '▶ 开始刷课+考试';
+  document.getElementById('btnLearnExam').textContent = busy ? '⏳ 执行中...' : '▶ 一键刷课+考试+证书';
 
   if (status === 'learning' || status === 'exam') {
     if (!progressTimer) progressTimer = setInterval(() => refreshProgress(), 1000);

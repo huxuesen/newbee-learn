@@ -49,6 +49,7 @@ class AccessReq(BaseModel):
 class BaomiLoginReq(BaseModel):
     phone: str
     password: str  # 保密观账号密码
+    cert_name: str = ""  # 用户姓名，用于证书
 
 
 class StartTaskReq(BaseModel):
@@ -147,6 +148,7 @@ async def auth_login(req: BaomiLoginReq, request: Request):
     sessions[sid]["phone"] = req.phone
     sessions[sid]["baomi_token"] = baomi_token
     sessions[sid]["nickname"] = nickname
+    sessions[sid]["cert_name"] = req.cert_name
 
     return {"nickname": nickname, "phone": req.phone}
 
@@ -416,6 +418,166 @@ async def start_exam(request: Request):
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
     return {"message": "开始考试"}
+
+
+# ─── 路由：一键全流程（检测→刷课→考试→证书） ──────────────────
+@app.post("/api/start-all")
+async def start_all(request: Request):
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    if not token:
+        raise HTTPException(status_code=401, detail="未登录")
+    payload = decode_jwt(token)
+    sid = payload["sid"]
+    if sid not in sessions:
+        raise HTTPException(status_code=401, detail="会话已失效")
+    if not sessions[sid].get("baomi_token"):
+        raise HTTPException(status_code=400, detail="请先登录保密观账号")
+
+    with tasks_lock:
+        task = tasks.get(sid)
+        if not task:
+            tasks[sid] = {"status": "idle", "logs": [], "log_idx": 0, "course_info": None, "exam_result": None}
+            task = tasks[sid]
+        if task["status"] in ("learning", "exam"):
+            raise HTTPException(status_code=400, detail="当前有任务正在执行，请等待完成")
+        task["status"] = "learning"
+        task["logs"] = []
+        task["log_idx"] = 0
+        task["exam_result"] = None
+
+    def _run():
+        try:
+            sess = sessions[sid]
+            http_session = requests.Session(); http_session.timeout = 15
+
+            def web_logger(msg):
+                with tasks_lock:
+                    t = tasks[sid]
+                    t["logs"].append({"time": _now(), "msg": msg})
+
+            cm = CourseManager(http_session, sess["baomi_token"], logger=web_logger)
+            cert_name = sess.get("cert_name", "")
+
+            # ① 检测学习进度
+            cm._log(f"🔍 检测课程进度... [{_now()}]")
+            progress = cm.get_course_progress(COURSE_PACKET_ID)
+            already_learned = False
+            if progress and progress.get("data"):
+                d = progress["data"]
+                rate = d.get("progressRate", 0)
+                is_finish = d.get("isFinish", False)
+                if is_finish or rate >= 0.999:
+                    already_learned = True
+                    cm._log(f"✅ 课程已学完（{rate*100:.1f}%），跳过刷课")
+                else:
+                    cm._log(f"📚 课程进度 {rate*100:.1f}%，开始刷课...")
+
+            # ② 刷课（未完成才执行）
+            if not already_learned:
+                cm._log(f"📚 开始自动学习课程... [{_now()}]")
+                success = cm.study_course(COURSE_PACKET_ID)
+                if success:
+                    cm._log("✅ 课程学习完成！")
+                else:
+                    cm._log("❌ 课程学习失败，请稍后重试")
+                    with tasks_lock:
+                        tasks[sid]["status"] = "error"
+                    return
+
+            # ③ 检测考试状态
+            cm._log(f"🔍 检测考试状态... [{_now()}]")
+            already_exam = False
+            try:
+                score_resp = http_session.get(
+                    "https://www.baomi.org.cn/portal/main-api/v2/coursePacket/getUserStudyCourseScore",
+                    params={"coursePacketId": COURSE_PACKET_ID, "token": sess["baomi_token"]},
+                    headers=_baomi_headers(sess["baomi_token"]),
+                    timeout=15,
+                ).json()
+                if score_resp.get("status") == 0 and score_resp.get("data"):
+                    exam_score = score_resp["data"].get("examScore", 0)
+                    if exam_score and exam_score > 0:
+                        already_exam = True
+                        cm._log(f"✅ 已有考试成绩 {exam_score} 分，跳过考试")
+            except Exception:
+                pass
+
+            # ④ 考试（未考过才执行）
+            if not already_exam:
+                with tasks_lock:
+                    tasks[sid]["status"] = "exam"
+                cm._log(f"📝 开始自动完成考试... [{_now()}]")
+                success = cm.complete_exam(COURSE_PACKET_ID)
+                if success:
+                    cm._log("🎉 考试完成！")
+                else:
+                    cm._log("❌ 考试失败，请稍后重试")
+                    with tasks_lock:
+                        tasks[sid]["status"] = "error"
+                    return
+
+            # ⑤ 获取证书（有姓名时自动获取）
+            if cert_name:
+                cm._log(f"🎓 自动获取证书（{cert_name}）... [{_now()}]")
+                try:
+                    # 获取考试成绩
+                    exam_score = 0
+                    try:
+                        sr = http_session.get(
+                            "https://www.baomi.org.cn/portal/main-api/v2/coursePacket/getUserStudyCourseScore",
+                            params={"coursePacketId": COURSE_PACKET_ID, "token": sess["baomi_token"]},
+                            headers=_baomi_headers(sess["baomi_token"]),
+                            timeout=15,
+                        ).json()
+                        if sr.get("status") == 0 and sr.get("data"):
+                            exam_score = sr["data"].get("examScore", 0) or sr["data"].get("totalScore", 0) or 0
+                    except Exception:
+                        pass
+
+                    cert_info = {
+                        "certificateNo": None,
+                        "courseId": "312bc914-8e11-421b-b9bc-e900fe1a4e50",
+                        "courseName": "2026年度全国保密教育线上培训",
+                        "totalGrade": 5.4,
+                        "trainStartDate": 1780588800000,
+                        "trainEndDate": 1793375999000,
+                        "examId": None, "examName": None, "examTime": None,
+                        "publishExam": 1,
+                        "examScore": exam_score,
+                        "examScoreText": "优秀",
+                        "userName": cert_name,
+                        "userMobileNo": None,
+                    }
+                    save_resp = http_session.post(
+                        "https://www.baomi.org.cn/portal/api/v2/coursePacket/saveUserCourseCertRecord",
+                        files={
+                            "coursePacketId": (None, COURSE_PACKET_ID),
+                            "certificateInfo": (None, json.dumps(cert_info, ensure_ascii=False)),
+                        },
+                        headers=_baomi_headers(sess["baomi_token"]),
+                        timeout=15,
+                    ).json()
+                    if save_resp.get("status") == 0:
+                        cm._log("✅ 证书获取成功！")
+                    else:
+                        cm._log(f"⚠️ 证书获取: {save_resp.get('message', '未知结果')}")
+                except Exception as e:
+                    cm._log(f"⚠️ 证书获取异常: {e}")
+            else:
+                cm._log("ℹ️ 未填写姓名，跳过证书获取")
+
+            cm._log("🎉 全部流程完成！")
+            with tasks_lock:
+                tasks[sid]["status"] = "completed"
+
+        except Exception as e:
+            with tasks_lock:
+                tasks[sid]["logs"].append({"time": _now(), "msg": f"[ERROR] 异常: {e}"})
+                tasks[sid]["status"] = "error"
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return {"message": "开始全流程"}
 
 
 # ─── 路由：SSE 日志流 ────────────────────────────────────────────────
