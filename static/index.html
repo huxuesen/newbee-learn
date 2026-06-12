@@ -402,6 +402,7 @@ let evtSource = null;
 let progressTimer = null;
 let certChecked = false;
 let certData = null;
+let CERT_NAME = localStorage.getItem('cert_name') || '';
 
 // ── 初始化 ──────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -473,6 +474,8 @@ async function handleBaomiLogin() {
     NICKNAME = data.nickname;
     PHONE = data.phone;
     LOGGED_IN = true;
+    CERT_NAME = certName;
+    localStorage.setItem('cert_name', certName);
     document.getElementById('nickname').textContent = NICKNAME || PHONE;
     document.getElementById('userLabel').classList.remove('hidden');
     document.getElementById('baomiLoginCard').classList.add('hidden');
@@ -497,6 +500,8 @@ function logout() {
   // 清理证书状态
   certChecked = false;
   certData = null;
+  CERT_NAME = '';
+  localStorage.removeItem('cert_name');
   document.getElementById('certSection').style.display = '';
   document.getElementById('certForm').classList.remove('hidden');
   document.getElementById('certPreview').classList.add('hidden');
@@ -710,7 +715,7 @@ async function checkCert() {
 }
 
 async function createCert() {
-  const name = document.getElementById('certNameInput').value.trim();
+  const name = CERT_NAME || document.getElementById('certNameInput').value.trim();
   const err = document.getElementById('certError');
   if (!name) { err.textContent = '请先在登录表单中填写姓名'; return; }
   err.textContent = '';
@@ -755,7 +760,7 @@ async function renderCertPreview(certInfo) {
     const w = canvas.width;
     const h = canvas.height;
 
-    const userName = certInfo.userName || certInfo.cert_name || document.getElementById('certNameInput').value || '';
+    const userName = CERT_NAME || certInfo.userName || certInfo.cert_name || document.getElementById('certNameInput').value || '';
     const certNo = certInfo.certificateNo || '';
     const certDate = certInfo.obtainCertDate || certInfo.certificateDate || '';
     const examScore = certInfo.examScore || 100;
