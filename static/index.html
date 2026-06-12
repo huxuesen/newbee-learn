@@ -789,16 +789,47 @@ async function renderCertPreview(certInfo) {
       else if (f.id === 'company') text = organ;
       else if (f.id === 'certificateName') text = certName;
 
-      const lines = text.split('\n');
-      lines.forEach((line, i) => {
+      // 自动换行函数
+      function wrapText(text, font, maxWidth) {
+        if (!text) return [];
+        const words = text.split('');
+        const lines = [];
+        let currentLine = '';
+        for (const char of words) {
+          const testLine = currentLine + char;
+          const metrics = ctx.measureText(testLine);
+          if (metrics.width > maxWidth && currentLine) {
+            lines.push(currentLine);
+            currentLine = char;
+          } else {
+            currentLine = testLine;
+          }
+        }
+        if (currentLine) lines.push(currentLine);
+        return lines;
+      }
+
+      const leftMargin = parseFloat(f.leftSpace || 0) * w;
+      const rightMargin = parseFloat(f.rightSpace || 0) * w;
+      const availWidth = w - leftMargin - rightMargin;
+
+      const rawLines = text.split('\n');
+      const allLines = [];
+      rawLines.forEach(line => {
+        if (ctx.measureText(line).width > availWidth) {
+          allLines.push(...wrapText(line, ctx.font, availWidth));
+        } else {
+          allLines.push(line);
+        }
+      });
+
+      allLines.forEach((line, i) => {
         const ly = y + i * fontSize * 1.4;
         if (f.alignment === 'center') {
           ctx.fillText(line, w / 2, ly);
         } else if (f.alignment === 'end') {
-          const rightMargin = parseFloat(f.rightSpace || 0) * w;
           ctx.fillText(line, w - rightMargin, ly);
         } else {
-          const leftMargin = parseFloat(f.leftSpace || 0) * w;
           ctx.fillText(line, leftMargin, ly);
         }
       });
