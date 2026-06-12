@@ -22,7 +22,7 @@ import config as app_config
 
 # ─── 配置 ────────────────────────────────────────────────────────────
 SECRET_KEY = os.environ.get("JWT_SECRET", "auto-baomiguan-secret-key-2026")
-AUTH_PASSWORD = os.environ.get("AUTH", "cbirc")
+AUTH_PASSWORD = os.environ.get("Auth", "cbirc")
 COURSE_PACKET_ID = app_config.course_packet_id
 
 # ─── FastAPI ─────────────────────────────────────────────────────────
