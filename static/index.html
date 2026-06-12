@@ -327,6 +327,26 @@
       <div class="error-msg" id="baomiError"></div>
     </div>
 
+    <!-- 证书区（始终可见） -->
+    <div id="certSection" style="margin-bottom:16px;">
+      <div class="info-card full" style="border:2px solid #f59e0b; background:linear-gradient(135deg,#fffbeb,#fef3c7);">
+        <div class="label" style="color:#92400e; font-size:1em;">🎓 获取学习证书</div>
+        <div id="certForm" style="margin-top:12px;">
+          <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <input type="text" id="certNameInput" placeholder="输入您的姓名（证书上显示）"
+                   style="flex:1; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:15px;">
+            <button class="btn btn-success" onclick="createCert()">🎓 获取证书</button>
+          </div>
+          <div class="error-msg" id="certError"></div>
+        </div>
+        <div id="certPreview" class="hidden" style="text-align:center; margin-top:12px;">
+          <canvas id="certCanvas" style="max-width:100%; border:1px solid #d1d5db; border-radius:8px; cursor:pointer;" onclick="downloadCert()"></canvas>
+          <p style="margin-top:8px; font-size:.85em; color:#6b7280;">👆 点击证书图片下载到本地</p>
+          <div id="certInfo" style="margin-top:8px; font-size:.85em; color:#374151;"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- 功能区（登录后显示） -->
     <div id="funcArea" class="hidden">
       <!-- 信息卡 -->
