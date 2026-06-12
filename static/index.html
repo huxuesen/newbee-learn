@@ -313,38 +313,24 @@
     <!-- 保密观登录卡片（未登录时显示） -->
     <div id="baomiLoginCard" class="baomi-login-card">
       <h3>📱 登录学习账号</h3>
-      <div class="baomi-login-row">
-        <div class="form-group">
-          <label>手机号</label>
-          <input type="text" id="phone" placeholder="请输入手机号">
+      <div class="baomi-login-row" style="flex-direction:column;">
+        <div style="display:flex; gap:10px; width:100%;">
+          <div class="form-group" style="flex:1;">
+            <label>手机号</label>
+            <input type="text" id="phone" placeholder="请输入手机号">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label>密码</label>
+            <input type="password" id="baomiPassword" placeholder="请输入密码">
+          </div>
         </div>
-        <div class="form-group">
-          <label>密码</label>
-          <input type="password" id="baomiPassword" placeholder="请输入密码">
+        <div class="form-group" style="width:100%; margin-top:10px;">
+          <label>姓名（用于证书）</label>
+          <input type="text" id="certNameInput" placeholder="请输入真实姓名">
         </div>
-        <button class="btn btn-success" id="baomiLoginBtn" onclick="handleBaomiLogin()">登 录</button>
+        <button class="btn btn-success" id="baomiLoginBtn" onclick="handleBaomiLogin()" style="width:100%; margin-top:12px;">登 录</button>
       </div>
       <div class="error-msg" id="baomiError"></div>
-    </div>
-
-    <!-- 证书区（始终可见） -->
-    <div id="certSection" style="margin-bottom:16px;">
-      <div class="info-card full" style="border:2px solid #f59e0b; background:linear-gradient(135deg,#fffbeb,#fef3c7);">
-        <div class="label" style="color:#92400e; font-size:1em;">🎓 获取学习证书</div>
-        <div id="certForm" style="margin-top:12px;">
-          <div style="display:flex; gap:8px; margin-bottom:12px;">
-            <input type="text" id="certNameInput" placeholder="输入您的姓名（证书上显示）"
-                   style="flex:1; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:15px;">
-            <button class="btn btn-success" onclick="createCert()">🎓 获取证书</button>
-          </div>
-          <div class="error-msg" id="certError"></div>
-        </div>
-        <div id="certPreview" class="hidden" style="text-align:center; margin-top:12px;">
-          <canvas id="certCanvas" style="max-width:100%; border:1px solid #d1d5db; border-radius:8px; cursor:pointer;" onclick="downloadCert()"></canvas>
-          <p style="margin-top:8px; font-size:.85em; color:#6b7280;">👆 点击证书图片下载到本地</p>
-          <div id="certInfo" style="margin-top:8px; font-size:.85em; color:#374151;"></div>
-        </div>
-      </div>
     </div>
 
     <!-- 功能区（登录后显示） -->
@@ -376,16 +362,12 @@
       <button class="btn btn-outline" onclick="refreshProgress()" style="flex:1;">🔄 刷新</button>
     </div>
 
-      <!-- 证书区（始终可见） -->
-      <div id="certSection" style="margin-bottom:16px;">
+      <!-- 证书区（登录后可见） -->
+      <div id="certSection" class="hidden" style="margin-bottom:16px;">
         <div class="info-card full" style="border:2px solid #f59e0b; background:linear-gradient(135deg,#fffbeb,#fef3c7);">
           <div class="label" style="color:#92400e; font-size:1em;">🎓 获取学习证书</div>
           <div id="certForm" style="margin-top:12px;">
-            <div style="display:flex; gap:8px; margin-bottom:12px;">
-              <input type="text" id="certNameInput" placeholder="输入您的姓名（证书上显示）"
-                     style="flex:1; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:15px;">
-              <button class="btn btn-success" onclick="createCert()">🎓 获取证书</button>
-            </div>
+            <button class="btn btn-success" onclick="createCert()" style="width:100%;">🎓 获取证书</button>
             <div class="error-msg" id="certError"></div>
           </div>
           <div id="certPreview" class="hidden" style="text-align:center; margin-top:12px;">
@@ -712,7 +694,7 @@ async function checkCert() {
 async function createCert() {
   const name = document.getElementById('certNameInput').value.trim();
   const err = document.getElementById('certError');
-  if (!name) { err.textContent = '请输入姓名'; return; }
+  if (!name) { err.textContent = '请先在登录表单中填写姓名'; return; }
   err.textContent = '';
 
   try {
