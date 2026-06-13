@@ -813,6 +813,7 @@ async function renderCertPreview(certInfo) {
       const rightMargin = parseFloat(f.rightSpace || 0) * w;
       const availWidth = w - leftMargin - rightMargin;
 
+      text = text.replace(/\\n/g, '\n').replace(/\n+/g, '\n').trim();
       const rawLines = text.split('\n');
       const allLines = [];
       rawLines.forEach(line => {
