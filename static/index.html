@@ -772,9 +772,10 @@ async function renderCertPreview(certInfo) {
       let rawFontSize = parseFloat(f.fontSize);
       if (f.id === 'userName' || f.id === 'certificateContent') rawFontSize = 16;
       if (f.id === 'certificateNo') rawFontSize = 12;
+      if (f.id === 'certificateDate') rawFontSize = 12;
       if (f.id === 'company') rawFontSize = 9;
       const fontSize = rawFontSize * w / 425;
-      const font = fontSize + 'px "SimHei", "Heiti SC", "Microsoft YaHei", sans-serif';
+      const font = fontSize + 'px sans-serif';
       ctx.fillStyle = f.color || '#000';
       ctx.font = font;
       ctx.textBaseline = 'top';
@@ -794,7 +795,10 @@ async function renderCertPreview(certInfo) {
           .replace('examResult', examScoreText);
       }
       else if (f.id === 'certificateNo') text = text.replace('certificateNo', certNo);
-      else if (f.id === 'certificateDate') text = certDate.split(' ')[0];
+      else if (f.id === 'certificateDate') {
+        const d = certDate.split(' ')[0].split('-');
+        text = d[0] + '年' + d[1] + '月' + d[2] + '日';
+      }
       else if (f.id === 'company') text = tplOrgan;
       else if (f.id === 'certificateName') text = tplCertName;
 
