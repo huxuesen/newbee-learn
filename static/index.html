@@ -733,123 +733,219 @@ async function renderCertPreview(certInfo) {
   const canvas = document.getElementById('certCanvas');
   const ctx = canvas.getContext('2d');
 
-  const resp = await fetch('/api/certificate/template', { headers: authHeaders() });
-  const tplData = await resp.json();
-  const tpl = tplData.data || tplData;
+  // 尝试从API获取证书模板背景
+  let bgUrl = '';
+  let tplOrgan = '国家保密局宣传教育司制';
+  try {
+    const resp = await fetch('/api/certificate/template', { headers: authHeaders() });
+    const tplData = await resp.json();
+    const tpl = tplData.data || tplData;
+    bgUrl = tpl.certificateBackground || '';
+    tplOrgan = tpl.certificateOrgan || tplOrgan;
+  } catch {}
 
-  const bgUrl = tpl.certificateBackground;
-  const bgImg = new Image();
-  bgImg.crossOrigin = 'anonymous';
+  // 证书尺寸：与官方一致的3:4竖版比例
+  const certW = 850;
+  const certH = 1200;
 
-  bgImg.onload = function() {
-    const maxWidth = Math.min(800, window.innerWidth - 40);
-    const scale = maxWidth / bgImg.width;
-    canvas.width = maxWidth;
-    canvas.height = bgImg.width * bgImg.height / bgImg.width * scale || bgImg.height * scale;
+  const userName = CERT_NAME || certInfo.userName || certInfo.cert_name || document.getElementById('certNameInput').value || '';
+  const certNo = certInfo.certificateNo || '';
+  const certDate = certInfo.obtainCertDate || certInfo.certificateDate || '';
+  const examScoreText = certInfo.examScoreText || '优秀';
 
-    ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+  function drawCertificate() {
+    canvas.width = certW;
+    canvas.height = certH;
+    const w = certW;
+    const h = certH;
 
-    const w = canvas.width;
-    const h = canvas.height;
+    // ── 背景 ──
+    ctx.fillStyle = '#f5f0e6';
+    ctx.fillRect(0, 0, w, h);
 
+    // ── 双层边框（深橄榄绿）──
+    ctx.strokeStyle = '#4a5a3a';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(18, 18, w - 36, h - 36);
+    ctx.lineWidth = 2;
+    ctx.strokeRect(30, 30, w - 60, h - 60);
+
+    // ── 角花装饰 ──
+    function drawCornerFlower(cx, cy, flipX, flipY) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+      ctx.strokeStyle = '#4a5a3a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(20, -5, 30, -15, 25, -30);
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(-5, 20, -15, 30, -30, 25);
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(15, 5, 25, 15, 35, 10);
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(5, 15, 15, 25, 10, 35);
+      ctx.stroke();
+      ctx.restore();
+    }
+    drawCornerFlower(40, 40, false, false);
+    drawCornerFlower(w - 40, 40, true, false);
+    drawCornerFlower(40, h - 40, false, true);
+    drawCornerFlower(w - 40, h - 40, true, true);
+
+    // ── 水印「密」字 ──
+    ctx.save();
+    ctx.globalAlpha = 0.06;
+    ctx.fillStyle = '#888';
+    ctx.font = 'bold 360px "SimHei", "Heiti SC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('密', w / 2, h / 2);
+    ctx.restore();
+
+    // ── 标题「保密教育培训证书」（红色加粗，居中）──
+    ctx.fillStyle = '#c03030';
+    ctx.font = 'bold 52px "SimHei", "Heiti SC", "Microsoft YaHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('保密教育培训证书', w / 2, h * 0.18);
+
+    // ── 正文字体设置 ──
+    const bodyFontSize = 26;
+    const bodyLineHeight = bodyFontSize * 1.8;
+    const leftX = w * 0.18;
+    ctx.fillStyle = '#222';
+    ctx.font = bodyFontSize + 'px "FangSong", "STFangsong", "SimSun", "Songti SC", serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+
+    // 「XXX同志:」
+    const nameY = h * 0.33;
+    ctx.fillText(userName + '同志:', leftX, nameY);
+
+    // 正文内容（自动换行）
+    const contentStartY = h * 0.41;
+    const maxTextWidth = w * 0.64;
+    const fullText = '您已完成2026年度全国保密教育线上培训课程，考试成绩' + examScoreText + '。';
+
+    function wrapText(text, maxWidth) {
+      const lines = [];
+      let current = '';
+      for (const ch of text) {
+        if (ctx.measureText(current + ch).width > maxWidth && current) {
+          lines.push(current);
+          current = ch;
+        } else {
+          current += ch;
+        }
+      }
+      if (current) lines.push(current);
+      return lines;
+    }
+
+    const contentLines = wrapText(fullText, maxTextWidth);
+    contentLines.forEach((line, i) => {
+      ctx.fillText(line, leftX, contentStartY + i * bodyLineHeight);
+    });
+
+    // 「特颁此证。」
+    const afterContentY = contentStartY + contentLines.length * bodyLineHeight + bodyLineHeight * 0.3;
+    ctx.fillText('特颁此证。', leftX, afterContentY);
+
+    // ── 证书号（居中）──
+    ctx.textAlign = 'center';
+    ctx.font = '24px "FangSong", "STFangsong", "SimSun", "Songti SC", serif';
+    ctx.fillText('证书号: ' + certNo, w / 2, h * 0.71);
+
+    // ── 日期（居中）──
+    ctx.fillText(certDate, w / 2, h * 0.79);
+
+    // ── 落款（居中，字号最小）──
+    ctx.font = '20px "FangSong", "STFangsong", "SimSun", "Songti SC", serif';
+    ctx.fillText(tplOrgan, w / 2, h * 0.91);
+
+    // 完成
+    document.getElementById('certPreview').classList.remove('hidden');
+    document.getElementById('certInfo').innerHTML =
+      '证书编号: <b>' + escHtml(certNo) + '</b> | 发证时间: <b>' + escHtml(certDate) + '</b>';
+  }
+
+  // 如果有背景图，先绘制背景再叠加文字
+  if (bgUrl) {
+    const bgImg = new Image();
+    bgImg.crossOrigin = 'anonymous';
+    bgImg.onload = function() {
+      canvas.width = certW;
+      canvas.height = certH;
+      ctx.drawImage(bgImg, 0, 0, certW, certH);
+      // 在背景图上叠加文字（跳过背景填充和边框）
+      drawCertificateOnBg(certW, certH);
+    };
+    bgImg.onerror = function() {
+      drawCertificate();
+    };
+    bgImg.src = bgUrl;
+  } else {
+    drawCertificate();
+  }
+
+  function drawCertificateOnBg(w, h) {
     const userName = CERT_NAME || certInfo.userName || certInfo.cert_name || document.getElementById('certNameInput').value || '';
     const certNo = certInfo.certificateNo || '';
     const certDate = certInfo.obtainCertDate || certInfo.certificateDate || '';
-    const examScore = certInfo.examScore || 100;
-    const certName = tpl.certificateName || '保密教育培训证书';
-    const organ = tpl.certificateOrgan || '';
+    const examScoreText = certInfo.examScoreText || '优秀';
 
-    const fields = tpl.template || [];
-    fields.forEach(f => {
-      const x = parseFloat(f.x_coordinate) * w;
-      const y = parseFloat(f.y_coordinate) * h;
-      const fontSize = parseFloat(f.fontSize) * (w / 800) * 2.8;
+    // 标题
+    ctx.fillStyle = '#c03030';
+    ctx.font = 'bold 52px "SimHei", "Heiti SC", "Microsoft YaHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('保密教育培训证书', w / 2, h * 0.18);
 
-      ctx.fillStyle = f.color || '#000';
-      ctx.font = fontSize + 'px "FangSong", "STFangsong", serif';
-      ctx.textAlign = f.alignment || 'start';
+    // 正文
+    const bodyFontSize = 26;
+    const bodyLineHeight = bodyFontSize * 1.8;
+    const leftX = w * 0.18;
+    ctx.fillStyle = '#222';
+    ctx.font = bodyFontSize + 'px "FangSong", "STFangsong", "SimSun", "Songti SC", serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
 
-      let text = f.name || '';
-      if (f.id === 'userName') text = (f.name || '').replace('XXX', userName);
-      else if (f.id === 'certificateContent') {
-        text = (f.name || '')
-          .replace('trainName', certInfo.courseName || '保密教育培训')
-          .replace('examResult', certInfo.examScoreText || examScore + '分');
+    ctx.fillText(userName + '同志:', leftX, h * 0.33);
+
+    const maxTextWidth = w * 0.64;
+    const fullText = '您已完成2026年度全国保密教育线上培训课程，考试成绩' + examScoreText + '。';
+    function wrap(text, max) {
+      const lines = []; let cur = '';
+      for (const ch of text) {
+        if (ctx.measureText(cur + ch).width > max && cur) { lines.push(cur); cur = ch; } else { cur += ch; }
       }
-      else if (f.id === 'certificateNo') text = (f.name || '').replace('certificateNo', certNo);
-      else if (f.id === 'certificateDate') text = '发证时间：' + certDate;
-      else if (f.id === 'company') text = organ;
-      else if (f.id === 'certificateName') text = certName;
+      if (cur) lines.push(cur);
+      return lines;
+    }
+    const cLines = wrap(fullText, maxTextWidth);
+    cLines.forEach((line, i) => ctx.fillText(line, leftX, h * 0.41 + i * bodyLineHeight));
+    ctx.fillText('特颁此证。', leftX, h * 0.41 + cLines.length * bodyLineHeight + bodyLineHeight * 0.3);
 
-      // 自动换行函数
-      function wrapText(text, font, maxWidth) {
-        if (!text) return [];
-        const words = text.split('');
-        const lines = [];
-        let currentLine = '';
-        for (const char of words) {
-          const testLine = currentLine + char;
-          const metrics = ctx.measureText(testLine);
-          if (metrics.width > maxWidth && currentLine) {
-            lines.push(currentLine);
-            currentLine = char;
-          } else {
-            currentLine = testLine;
-          }
-        }
-        if (currentLine) lines.push(currentLine);
-        return lines;
-      }
-
-      const leftMargin = parseFloat(f.leftSpace || 0) * w;
-      const rightMargin = parseFloat(f.rightSpace || 0) * w;
-      const availWidth = w - leftMargin - rightMargin;
-
-      text = text.replace(/\\n/g, '\n').replace(/\n+/g, '\n').trim();
-      const rawLines = text.split('\n');
-      const allLines = [];
-      rawLines.forEach(line => {
-        if (ctx.measureText(line).width > availWidth) {
-          allLines.push(...wrapText(line, ctx.font, availWidth));
-        } else {
-          allLines.push(line);
-        }
-      });
-
-      allLines.forEach((line, i) => {
-        const ly = y + i * fontSize * 1.4;
-        if (f.alignment === 'center') {
-          ctx.fillText(line, w / 2, ly);
-        } else if (f.alignment === 'end') {
-          ctx.fillText(line, w - rightMargin, ly);
-        } else {
-          ctx.fillText(line, leftMargin, ly);
-        }
-      });
-    });
+    ctx.textAlign = 'center';
+    ctx.font = '24px "FangSong", "STFangsong", "SimSun", "Songti SC", serif';
+    ctx.fillText('证书号: ' + certNo, w / 2, h * 0.71);
+    ctx.fillText(certDate, w / 2, h * 0.79);
+    ctx.font = '20px "FangSong", "STFangsong", "SimSun", "Songti SC", serif';
+    ctx.fillText(tplOrgan, w / 2, h * 0.91);
 
     document.getElementById('certPreview').classList.remove('hidden');
     document.getElementById('certInfo').innerHTML =
       '证书编号: <b>' + escHtml(certNo) + '</b> | 发证时间: <b>' + escHtml(certDate) + '</b>';
-  };
-
-  bgImg.onerror = function() {
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#000';
-    ctx.font = '20px serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('证书预览', canvas.width/2, 40);
-    document.getElementById('certPreview').classList.remove('hidden');
-  };
-
-  bgImg.src = bgUrl;
+  }
 }
 
 function downloadCert() {
   const canvas = document.getElementById('certCanvas');
   const link = document.createElement('a');
-  link.download = '学习证书_' + (certData && certData.certificateNo || 'unknown') + '.png';
+  const name = CERT_NAME || (certData && (certData.userName || certData.cert_name)) || '';
+  link.download = '2026年度全国保密教育线上培训证书' + (name ? '-' + name : '') + '.png';
   link.href = canvas.toDataURL('image/png');
   link.click();
 }
