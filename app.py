@@ -22,7 +22,6 @@ import config as app_config
 
 # ─── 配置 ────────────────────────────────────────────────────────────
 SECRET_KEY = os.environ.get("JWT_SECRET", "auto-baomiguan-secret-key-2026")
-AUTH_PASSWORD = os.environ.get("Auth", "cbirc")
 COURSE_PACKET_ID = app_config.course_packet_id
 
 # ─── FastAPI ─────────────────────────────────────────────────────────
@@ -42,10 +41,6 @@ def _now():
 
 
 # ─── Pydantic 模型 ──────────────────────────────────────────────────
-class AccessReq(BaseModel):
-    access_password: str  # 网站访问密码 (AUTH_PASSWORD)
-
-
 class BaomiLoginReq(BaseModel):
     phone: str
     password: str  # 保密观账号密码
@@ -110,10 +105,8 @@ async def index():
 
 # ─── 路由：认证 ──────────────────────────────────────────────────────
 @app.post("/api/auth/access")
-async def auth_access(req: AccessReq):
-    """第一步：校验访问密码，通过后返回 JWT（此时尚未登录保密观）。"""
-    if req.access_password != AUTH_PASSWORD:
-        raise HTTPException(status_code=403, detail="访问密码错误")
+async def auth_access():
+    """获取访问 JWT（此时尚未登录保密观）。"""
     sid = str(uuid.uuid4())
     sessions[sid] = {"phone": "", "baomi_token": "", "nickname": ""}
     tasks[sid] = {"status": "idle", "logs": [], "log_idx": 0, "course_info": None, "exam_result": None}

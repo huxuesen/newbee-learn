@@ -290,11 +290,7 @@
     <h1>小蜜蜂学习系统</h1>
 
     <form id="loginForm" onsubmit="handleAccess(event)">
-      <div class="form-group">
-        <label>访问密码</label>
-        <input type="password" id="accessPassword" placeholder="请输入访问密码" required>
-      </div>
-      <button type="submit" class="btn btn-primary" id="loginBtn">进 入</button>
+      <p style="text-align:center; color:var(--text-dim); font-size:.9em; margin-bottom:20px;">正在进入系统...</p>
       <div class="error-msg" id="loginError"></div>
     </form>
   </div>
@@ -422,33 +418,27 @@ window.addEventListener('DOMContentLoaded', async () => {
     JWT = '';
     localStorage.removeItem('jwt_token');
   }
-  showLogin();
+  // 没有有效 JWT，自动获取一个
+  handleAccess();
 });
 
-// ── 第一步：访问密码 ────────────────────
+// ── 自动获取访问 JWT ───────────────────
 async function handleAccess(e) {
-  e.preventDefault();
-  const btn = document.getElementById('loginBtn');
+  if (e) e.preventDefault();
   const err = document.getElementById('loginError');
-  btn.disabled = true;
-  btn.textContent = '验证中...';
   err.textContent = '';
   try {
     const resp = await fetch('/api/auth/access', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ access_password: document.getElementById('accessPassword').value }),
     });
     const data = await resp.json();
-    if (!resp.ok) { err.textContent = data.detail || '验证失败'; return; }
+    if (!resp.ok) { err.textContent = data.detail || '进入失败'; return; }
     JWT = data.token;
     localStorage.setItem('jwt_token', JWT);
     showDashboard();
   } catch (e) {
     err.textContent = '网络错误: ' + e.message;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '进 入';
   }
 }
 
@@ -515,6 +505,8 @@ function logout() {
   document.getElementById('courseName').textContent = '-';
   document.getElementById('logBody').innerHTML = '<div class="log-entry" style="color:#9ca3af;">等待操作...</div>';
   showLogin();
+  // 自动获取新的访问 JWT
+  handleAccess();
 }
 
 // ── 页面切换 ────────────────────────────
