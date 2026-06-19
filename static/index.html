@@ -733,18 +733,20 @@ async function renderCertPreview(certInfo) {
   const canvas = document.getElementById('certCanvas');
   const ctx = canvas.getContext('2d');
 
-  // 尝试从API获取证书模板背景
-  let bgUrl = '';
-  let tplOrgan = '国家保密局宣传教育司制';
+  // 从API获取证书模板
+  let tpl = null;
   try {
     const resp = await fetch('/api/certificate/template', { headers: authHeaders() });
     const tplData = await resp.json();
-    const tpl = tplData.data || tplData;
-    bgUrl = tpl.certificateBackground || '';
-    tplOrgan = tpl.certificateOrgan || tplOrgan;
+    tpl = tplData.data || tplData;
   } catch {}
 
-  // 证书尺寸：与官网下载一致 425x600
+  const bgUrl = (tpl && tpl.certificateBackground) || '';
+  const tplOrgan = (tpl && tpl.certificateOrgan) || '国家保密局宣传教育司制';
+  const fields = (tpl && tpl.template) || [];
+  const tplCertName = (tpl && tpl.certificateName) || '保密教育培训证书';
+
+  // 425x600 与模板原始尺寸一致
   const certW = 425;
   const certH = 600;
 
@@ -753,113 +755,107 @@ async function renderCertPreview(certInfo) {
   const certDate = certInfo.obtainCertDate || certInfo.certificateDate || '';
   const examScoreText = certInfo.examScoreText || '优秀';
 
-  // 统一绘制文字的函数
-  function drawText(w, h) {
-    // 标题「保密教育培训证书」（红色加粗，居中）
-    ctx.fillStyle = '#c03030';
-    ctx.font = 'bold 26px "SimHei", "Heiti SC", "Microsoft YaHei", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText('保密教育培训证书', w / 2, h * 0.18);
+  function drawText() {
+    const w = certW, h = certH;
 
-    // 正文
-    const fs = 13;
-    const lh = fs * 1.8;
-    const leftX = w * 0.18;
-    ctx.fillStyle = '#222';
-    ctx.font = '13px "SimHei", "Heiti SC", "Microsoft YaHei", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-
-    // 「XXX同志:」
-    ctx.fillText(userName + '同志:', leftX, h * 0.33);
-
-    // 正文（自动换行）
-    const fullText = '\u3000您已完成2026年度全国保密教育线上培训课程，考试成绩' + examScoreText + '。';
-    const maxW = w * 0.64;
-    function wrap(text) {
+    function wrapText(text, font, maxWidth) {
+      ctx.font = font;
       const lines = []; let cur = '';
       for (const ch of text) {
-        if (ctx.measureText(cur + ch).width > maxW && cur) { lines.push(cur); cur = ch; } else { cur += ch; }
+        if (ctx.measureText(cur + ch).width > maxWidth && cur) { lines.push(cur); cur = ch; } else { cur += ch; }
       }
       if (cur) lines.push(cur);
       return lines;
     }
-    const cLines = wrap(fullText);
-    cLines.forEach((line, i) => ctx.fillText(line, leftX, h * 0.41 + i * lh));
 
-    // 「　特颁此证。」
-    ctx.fillText('\u3000特颁此证。', leftX, h * 0.41 + cLines.length * lh + lh * 0.3);
+    fields.forEach(f => {
+      let rawFontSize = parseFloat(f.fontSize);
+      if (f.id === 'userName' || f.id === 'certificateContent') rawFontSize = 16;
+      if (f.id === 'certificateNo') rawFontSize = 12;
+      if (f.id === 'company') rawFontSize = 9;
+      const fontSize = rawFontSize * w / 425;
+      const font = fontSize + 'px "SimHei", "Heiti SC", "Microsoft YaHei", sans-serif';
+      ctx.fillStyle = f.color || '#000';
+      ctx.font = font;
+      ctx.textBaseline = 'top';
 
-    // 证书号（居中）
-    ctx.textAlign = 'center';
-    ctx.font = '12px "SimHei", "Heiti SC", "Microsoft YaHei", sans-serif';
-    ctx.fillText('证书号: ' + certNo, w / 2, h * 0.71);
+      const leftMargin = parseFloat(f.leftSpace || 0) * w;
+      const rightMargin = parseFloat(f.rightSpace || 0) * w;
+      const x = parseFloat(f.x_coordinate) * w;
+      const y = parseFloat(f.y_coordinate) * h;
+      const availWidth = w - leftMargin - rightMargin;
 
-    // 日期（居中）
-    ctx.fillText(certDate, w / 2, h * 0.79);
+      let text = f.name || '';
+      if (f.id === 'userName') text = text.replace('XXX', userName);
+      else if (f.id === 'certificateContent') {
+        text = text
+          .replace(/    /g, '\u3000\u3000')
+          .replace('trainName', certInfo.courseName || '保密教育培训')
+          .replace('examResult', examScoreText);
+      }
+      else if (f.id === 'certificateNo') text = text.replace('certificateNo', certNo);
+      else if (f.id === 'certificateDate') text = certDate.split(' ')[0];
+      else if (f.id === 'company') text = tplOrgan;
+      else if (f.id === 'certificateName') text = tplCertName;
 
-    // 落款（居中，字号最小）
-    ctx.font = '10px "SimHei", "Heiti SC", "Microsoft YaHei", sans-serif';
-    ctx.fillText(tplOrgan, w / 2, h * 0.91);
+      const align = f.alignment || 'start';
+      let drawX;
+      if (align === 'center') drawX = leftMargin + availWidth / 2;
+      else if (align === 'end') drawX = w - rightMargin;
+      else drawX = leftMargin;
+
+      ctx.textAlign = align;
+
+      text = text.replace(/\\n/g, '\n');
+      const rawLines = text.split('\n');
+      const allLines = [];
+      rawLines.forEach(line => {
+        if (ctx.measureText(line).width > availWidth) {
+          allLines.push(...wrapText(line, font, availWidth));
+        } else {
+          allLines.push(line);
+        }
+      });
+
+      allLines.forEach((line, i) => {
+        ctx.fillText(line, drawX, y + i * fontSize * 1.5);
+      });
+    });
 
     document.getElementById('certPreview').classList.remove('hidden');
     document.getElementById('certInfo').innerHTML =
       '证书编号: <b>' + escHtml(certNo) + '</b> | 发证时间: <b>' + escHtml(certDate) + '</b>';
   }
 
-  function drawCertificate() {
+  function drawBase() {
     canvas.width = certW;
     canvas.height = certH;
-    const w = certW, h = certH;
-
-    // 背景
     ctx.fillStyle = '#f5f0e6';
-    ctx.fillRect(0, 0, w, h);
-
-    // 双层边框（深橄榄绿）
+    ctx.fillRect(0, 0, certW, certH);
     ctx.strokeStyle = '#4a5a3a';
     ctx.lineWidth = 3;
-    ctx.strokeRect(9, 9, w - 18, h - 18);
+    ctx.strokeRect(9, 9, certW - 18, certH - 18);
     ctx.lineWidth = 1;
-    ctx.strokeRect(15, 15, w - 30, h - 30);
-
-    // 角花装饰
-    function drawCornerFlower(cx, cy, fx, fy) {
-      ctx.save(); ctx.translate(cx, cy); ctx.scale(fx ? -1 : 1, fy ? -1 : 1);
-      ctx.strokeStyle = '#4a5a3a'; ctx.lineWidth = 1; ctx.beginPath();
-      ctx.moveTo(0, 0); ctx.bezierCurveTo(10, -3, 15, -8, 12, -15);
-      ctx.moveTo(0, 0); ctx.bezierCurveTo(-3, 10, -8, 15, -15, 12);
-      ctx.moveTo(0, 0); ctx.bezierCurveTo(8, 3, 12, 8, 18, 5);
-      ctx.moveTo(0, 0); ctx.bezierCurveTo(3, 8, 8, 12, 5, 18);
-      ctx.stroke(); ctx.restore();
-    }
-    drawCornerFlower(20, 20, false, false);
-    drawCornerFlower(w - 20, 20, true, false);
-    drawCornerFlower(20, h - 20, false, true);
-    drawCornerFlower(w - 20, h - 20, true, true);
-
-    // 水印「密」字
-    ctx.save(); ctx.globalAlpha = 0.06; ctx.fillStyle = '#888';
-    ctx.font = 'bold 180px "SimHei", sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('密', w / 2, h / 2); ctx.restore();
-
-    drawText(w, h);
+    ctx.strokeRect(15, 15, certW - 30, certH - 30);
   }
 
   if (bgUrl) {
     const bgImg = new Image();
     bgImg.crossOrigin = 'anonymous';
     bgImg.onload = function() {
-      canvas.width = certW; canvas.height = certH;
+      canvas.width = certW;
+      canvas.height = certH;
       ctx.drawImage(bgImg, 0, 0, certW, certH);
-      drawText(certW, certH);
+      drawText();
     };
-    bgImg.onerror = function() { drawCertificate(); };
+    bgImg.onerror = function() {
+      drawBase();
+      drawText();
+    };
     bgImg.src = bgUrl;
   } else {
-    drawCertificate();
+    drawBase();
+    drawText();
   }
 }
 
