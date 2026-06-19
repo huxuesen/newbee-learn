@@ -773,7 +773,7 @@ async function renderCertPreview(certInfo) {
       if (f.id === 'userName' || f.id === 'certificateContent') rawFontSize = 16;
       if (f.id === 'certificateNo') rawFontSize = 12;
       if (f.id === 'certificateDate') rawFontSize = 12;
-      if (f.id === 'company') rawFontSize = 9;
+      if (f.id === 'company') rawFontSize = 10;
       const fontSize = rawFontSize * w / 425;
       const font = fontSize + 'px sans-serif';
       ctx.fillStyle = f.color || '#000';
